@@ -14,8 +14,8 @@ do
 		efetch -format xml | \
 		tee >(xtract -pattern Article -element ArticleTitle > "$OUTDIR/${YEAR}_${MONTH}_TitleText.txt") | \
 		tee >(xtract -pattern MeshHeading -element DescriptorName > "$OUTDIR/${YEAR}_${MONTH}_KeywordText.txt") | \
-		tee >(xtract -pattern Abstract -element AbstractText > "$OUTDIR/${YEAR}_${MONTH}_AbstractText.txt") | \
-		> "$OUTDIR/xml/${YEAR}_${MONTH}.xml"
+		tee >(xtract -pattern Abstract -element AbstractText > "$OUTDIR/${YEAR}_${MONTH}_AbstractText.txt") > \
+		"$OUTDIR/xml/${YEAR}_${MONTH}.xml"
 		
 		sleep 5
 	done
