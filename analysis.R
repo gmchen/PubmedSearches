@@ -12,11 +12,11 @@ for(year in 1976:2015) {
     # textType: 1 for title, 2 for abstract, 3 for keyword
     for(textType in 1:3) {
       if(textType == 1) {
-        toAdd <- Corpus(DirSource("Pubmed_JAMA/", pattern = paste0(year, "_", month, "_TitleText\\.txt")))
+        toAdd <- Corpus(DirSource("Pubmed_BMJ/", pattern = paste0(year, "_", month, "_TitleText\\.txt")))
       } else if (textType == 2) {
-        toAdd <- Corpus(DirSource("Pubmed_JAMA/", pattern = paste0(year, "_", month, "_AbstractText\\.txt")))
+        toAdd <- Corpus(DirSource("Pubmed_BMJ/", pattern = paste0(year, "_", month, "_AbstractText\\.txt")))
       } else if(textType == 3) {
-        toAdd <- Corpus(DirSource("Pubmed_JAMA/", pattern = paste0(year, "_", month, "_KeywordText\\.txt")))  
+        toAdd <- Corpus(DirSource("Pubmed_BMJ/", pattern = paste0(year, "_", month, "_KeywordText\\.txt")))  
       }
       meta(toAdd, "Year", "local") <- year
       meta(toAdd, "Month", "local") <- month
@@ -55,14 +55,19 @@ jamaTexts <- lapply(jamaTexts, function(currentCorpus) tm_map(currentCorpus, str
 jamaTexts <- lapply(jamaTexts, function(currentCorpus) tm_map(currentCorpus, removePunctuation))
 
 # Term-document matrix
-myMat <- DocumentTermMatrix(titleTexts)
 
 myMat <- DocumentTermMatrix(jamaTexts$title)
 matrix.colsums <- colSums(inspect(myMat))
 matrix.rowsums <- rowSums(inspect(myMat))
 freq.count.table <- data.frame(word=colnames(myMat), count=matrix.colsums)
 
-myMat.freq.per.1000 <- t(t(inspect(myMat)) * 1000 / matrix.rowsums)
+# To avoid divide-by-zero errors, replace zero sums with 1.
+matrix.rowsums[matrix.rowsums == 0] <- 1
+myMat.data <- inspect(myMat)
+
+#myMat.freq.per.1000 <- t(t(myMat.data) * 1000 / matrix.rowsums) # This seems to cause floating point errors!
+#myMat.freq.per.1000 <- sweep(myMat.data * 1000, 1, matrix.rowsums, "/")
+myMat.freq.per.1000 <- myMat.data / matrix.rowsums
 
 # only include terms that have occurred at least 1/1000 (0.01%) of the time
 myTDMHiFreq <- myMat.freq.per.1000[,freq.count.table$count > 0.0001 * sum(freq.count.table$count)]
@@ -76,6 +81,7 @@ for(year in 1976:2015) {
 rownames(my.new.tdm) <- paste0("Year-", 1976:2015)
 colnames(my.new.tdm) <- colnames(myTDMHiFreq)
 
+years <- 1976:2015
 year.coefficients <- apply(my.new.tdm, 2, function(y) coef(lm(y ~ years))["years"])
 year.pvals <- apply(my.new.tdm, 2, function(y) summary(lm(y ~ years))$coefficients[2,4])
 
@@ -86,5 +92,5 @@ sig.year.coefficients <- year.coefficients[fdr.adj.year.pvals < 0.01]
 barplot(my.new.tdm[,"patient"])
 
 # find all words after "among"
-out <- sapply(jamaTexts$title, function(x) unlist(str_extract_all(x$content, '(?<=among\\s)\\w+')))
+out <- sapply(jamaTexts$abstract, function(x) unlist(str_extract_all(x$content, '(?<=among\\s)\\w+')))
 # Can do some analyses on just these words, can do fancy things like take up to the first noun after "among"
