@@ -1,5 +1,7 @@
 library(tm)
 library(SnowballC)
+library(readr)
+library(XML)
 
 jamaTexts <- list(title=NULL, abstract=NULL, keyword=NULL)
 
