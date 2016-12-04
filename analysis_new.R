@@ -26,7 +26,28 @@ for(year in 1976:2015) {
         return(val)
     }
     current.titles <- unname(sapply(xml.text.list, get_from_list, c("MedlineCitation", "Article", "ArticleTitle")))
-    current.abstracts <- unname(sapply(xml.text.list, get_from_list, c("MedlineCitation", "Article", "Abstract", "AbstractText")))
+    
+    current.abstract.lists <- sapply(xml.text.list, get_from_list, c("MedlineCitation", "Article", "Abstract"))
+    
+    current.abstract.lists <- lapply(xml.text.list, get_from_list, c("MedlineCitation", "Article", "Abstract"))
+    # Sometimes $AbstractText is a character vector, sometimes is a list with $text character vectors
+    current.abstracts <- sapply(current.abstract.lists, function(x) {
+      if(is.null(x)) {
+        return(NULL)
+      }
+      if(is.character(x$AbstractText)) {
+        return(x$AbstractText)
+      }
+      if(is.list(x$AbstractText)) {
+        return(paste(sapply(x, function(y) y$text), collapse=" "))
+      }
+      else{
+        stop("Found an AbstractText field that is neither null, a character, or a list")
+        }
+      })
+        
+      
+    
     current.keywords <- unname(lapply(xml.text.list, get_from_list, c("MedlineCitation", "MeshHeadingList")))
     current.keywords <- lapply(current.keywords, function(x) sapply(x, get_from_list, c("DescriptorName", "text")))
     
@@ -92,9 +113,27 @@ for(year in 1976:2015) {
 }
 
 # To lowercase
-title.texts.with.clinical.trial <- tm_map(title.texts.with.clinical.trial, content_transformer(tolower))
+title.texts.case.report <- tm_map(title.texts.case.report, content_transformer(tolower))
 # Remove punctuation
-title.texts.with.clinical.trial <-tm_map(title.texts.with.clinical.trial, removePunctuation)
+title.texts.case.report <-tm_map(title.texts.case.report, removePunctuation)
+
+title.texts.case.report <- NULL
+for(year in 1976:2015) {
+  is.case.report <- sapply(texts$publication.types[texts$year == year], function(pubtypes) "Case Reports" %in% pubtypes)
+  current.corpus.texts <- texts$title[texts$year == year][is.clinical.trial]
+  toAdd <- Corpus(VectorSource(paste(current.corpus.texts, collapse = " ")))
+  meta(toAdd, "id", "local") <- paste0("Title_text_case_report_", year)
+  if(is.null(title.texts.case.report)) {
+    title.texts.case.report <- toAdd
+  } else {
+    title.texts.case.report <- c(title.texts.case.report, toAdd)
+  }
+}
+
+# To lowercase
+title.texts.case.report <- tm_map(title.texts.case.report, content_transformer(tolower))
+# Remove punctuation
+title.texts.case.report <-tm_map(title.texts.case.report, removePunctuation)
 
 title.texts.excluding.clinical.trials <- NULL
 for(year in 1976:2015) {
@@ -155,7 +194,7 @@ abstract.texts.with.clinical.trial <-tm_map(abstract.texts.with.clinical.trial, 
 
 
 
-myMat <- DocumentTermMatrix(title.texts.with.clinical.trial)
+myMat <- DocumentTermMatrix(title.texts)
 
 matrix.colsums <- colSums(inspect(myMat))
 matrix.rowsums <- rowSums(inspect(myMat))
@@ -178,12 +217,15 @@ year.pvals <- apply(myTDMHiFreq, 2, function(y) summary(lm(y ~ years))$coefficie
 
 fdr.adj.year.pvals <- p.adjust(year.pvals, method="fdr")
 
-sig.year.coefficients <- year.coefficients[fdr.adj.year.pvals < 0.05]
+sig.year.coefficients <- year.coefficients[fdr.adj.year.pvals < 0.01]
 sort(sig.year.coefficients)
 
 barplot(myTDMHiFreq[,"among"])
 
+# do this barplot in chunks of five years
+barplot(tapply(myTDMHiFreq[,"from"], (seq_along(myTDMHiFreq[,"from"])-1) %/% 5, sum))
+
 # find all words after "among"
-out <- sapply(jamaTexts$abstract, function(x) unlist(str_extract_all(x$content, '(?<=among\\s)\\w+')))
+out <- sapply(title.texts, function(x) unlist(str_extract_all(x$content, '(?<=among\\s)\\w+')))
 # Can do some analyses on just these words, can do fancy things like take up to the first noun after "among"
 

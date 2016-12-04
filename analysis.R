@@ -14,11 +14,11 @@ for(year in 1976:2015) {
     # textType: 1 for title, 2 for abstract, 3 for keyword
     for(textType in 1:3) {
       if(textType == 1) {
-        toAdd <- Corpus(DirSource("Pubmed_BMJ/", pattern = paste0(year, "_", month, "_TitleText\\.txt")))
+        toAdd <- Corpus(DirSource("Pubmed_JAMA/", pattern = paste0(year, "_", month, "_TitleText\\.txt")))
       } else if (textType == 2) {
-        toAdd <- Corpus(DirSource("Pubmed_BMJ/", pattern = paste0(year, "_", month, "_AbstractText\\.txt")))
+        toAdd <- Corpus(DirSource("Pubmed_JAMA/", pattern = paste0(year, "_", month, "_AbstractText\\.txt")))
       } else if(textType == 3) {
-        toAdd <- Corpus(DirSource("Pubmed_BMJ/", pattern = paste0(year, "_", month, "_KeywordText\\.txt")))  
+        toAdd <- Corpus(DirSource("Pubmed_JAMA/", pattern = paste0(year, "_", month, "_KeywordText\\.txt")))  
       }
       meta(toAdd, "Year", "local") <- year
       meta(toAdd, "Month", "local") <- month
@@ -48,7 +48,7 @@ for(i in 1:length(jamaTexts$title)) {
 }
 
 # Remove stopwords
-jamaTexts <- lapply(jamaTexts, function(currentCorpus) tm_map(currentCorpus, removeWords, stopwords("english")))
+#jamaTexts <- lapply(jamaTexts, function(currentCorpus) tm_map(currentCorpus, removeWords, stopwords("english")))
 
 # Strip whitespace
 jamaTexts <- lapply(jamaTexts, function(currentCorpus) tm_map(currentCorpus, stripWhitespace))
