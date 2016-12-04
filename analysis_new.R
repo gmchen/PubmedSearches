@@ -46,7 +46,9 @@ for(year in 1976:2015) {
           return(x$AbstractText)
         }
         if(is.list(x$AbstractText)) {
-          return(paste(sapply(x[(names(x) == "AbstractText")], function(y) y$text), collapse=" "))
+          x <- x[(names(x) == "AbstractText")]
+          x <- x[sapply(x, function(y) "text" %in% names(y))]
+          return(paste(sapply(x, function(y) y$text), collapse=" "))
         }
         else{
           stop("Found an AbstractText field that is neither null, a character, or a list")
@@ -213,29 +215,69 @@ myMat <- DocumentTermMatrix(title.texts)
 
 matrix.colsums <- colSums(inspect(myMat))
 matrix.rowsums <- rowSums(inspect(myMat))
+year.term.count.sums <- matrix.rowsums
 freq.count.table <- data.frame(word=colnames(myMat), count=matrix.colsums)
 
 # To avoid divide-by-zero errors, replace zero sums with 1. This variable is only used in the row-wise division.
-matrix.rowsums[matrix.rowsums == 0] <- 1
-myMat.data <- inspect(myMat)
+myTDMCounts <- inspect(myMat)
 
-#myMat.freq.per.1000 <- t(t(myMat.data) * 1000 / matrix.rowsums) # This seems to cause floating point errors!
-#myMat.freq.per.1000 <- sweep(myMat.data * 1000, 1, matrix.rowsums, "/")
-myMat.freq.per.1000 <- myMat.data * 1000 / matrix.rowsums
+myMat.freq.per.1000 <- myTDMCounts * 1000 / matrix.rowsums
 
 # only include terms that have occurred at least 1/10000 (0.01%) of the time
-myTDMHiFreq <- myMat.freq.per.1000[,freq.count.table$count > 0.0001 * sum(freq.count.table$count)]
+myTDMHiFreq.per.1000 <- myMat.freq.per.1000[,freq.count.table$count > 0.0001 * sum(freq.count.table$count)]
+myTDMCountsHiFreq <- myTDMCounts[,freq.count.table$count > 0.0001 * sum(freq.count.table$count)]
 
 years <- 1976:2015
-year.coefficients <- apply(myTDMHiFreq, 2, function(y) coef(lm(y ~ years))["years"])
-year.pvals <- apply(myTDMHiFreq, 2, function(y) summary(lm(y ~ years))$coefficients[2,4])
+year.coefficients <- apply(myTDMHiFreq.per.1000, 2, function(y) coef(lm(y ~ years))["years"])
+year.pvals <- apply(myTDMHiFreq.per.1000, 2, function(y) summary(lm(y ~ years))$coefficients[2,4])
 
 fdr.adj.year.pvals <- p.adjust(year.pvals, method="fdr")
 
 sig.year.coefficients <- year.coefficients[fdr.adj.year.pvals < 0.01]
 sort(sig.year.coefficients)
 
-barplot(myTDMHiFreq[,"among"])
+barplot(myTDMHiFreq.per.1000[,"diabetic"])
+
+current.freq.per.1000 <- myTDMHiFreq.per.1000[,"diabetic"]
+
+barplot.df.to.plot <- data.frame(
+                              freq.per.1000 = current.freq.per.1000,
+                              year = 1976:2015
+                              )
+
+#current.conf.ints <- lapply(1:nrow(myTDMHiFreq.per.1000), function(x) {
+#  prop.test.out <- prop.test(myTDMCounts[x,"diabetes"], year.term.count.sums[x])
+#  prop.test.conf.ints <- as.vector(prop.test.out$conf.int * 1000)
+#  names(prop.test.conf.ints) <- c("lower", "upper")
+#  return(prop.test.conf.ints)
+#  })
+#current.standard.errors <- sapply(1:nrow(myTDMHiFreq.per.1000), function(x) {
+#  k <- myTDMCounts[x,"diabetic"]
+#  n <- year.term.count.sums[x]
+#  pbar <- k / n
+#  SE = sqrt(pbar * (1-pbar)/n)
+#  return(SE)
+#})
+#barplot.df.to.plot <- as.data.frame(do.call(rbind, current.conf.ints))
+#barplot.df.to.plot$freq.per.1000 <- current.freq.per.1000
+#barplot.df.to.plot$year <- 1976:2015
+#barplot.df.to.plot$se <- current.standard.errors * 1000
+
+#ggplot(barplot.df.to.plot, aes(x = year, y = freq.per.1000)) +  
+#  geom_point(stat="identity", fill="blue") + 
+#  geom_errorbar(aes(ymin=freq.per.1000-se, ymax=freq.per.1000+se)) +
+#  ggtitle("Bar plot with 95% confidence intervals") + # plot title
+#  theme_bw() + # remove grey background (because Tufte said so)
+#  theme(panel.grid.major = element_blank())
+ggplot(barplot.df.to.plot, aes(x = year, y = freq.per.1000)) +  
+  stat_smooth() +
+  geom_point(stat="identity", fill="blue") + 
+#  geom_errorbar(aes(ymin=lower, ymax=upper)) +
+  ggtitle("Frequency of the word \"diabetic\"") + # plot title
+  xlab("Year") + 
+  ylab("Frequency per 1000 words") +
+  theme_bw() + # remove grey background (because Tufte said so)
+  theme(panel.grid.major = element_blank())
 
 # do this barplot in chunks of five years
 barplot(tapply(myTDMHiFreq[,"from"], (seq_along(myTDMHiFreq[,"from"])-1) %/% 5, sum))
