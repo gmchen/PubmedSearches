@@ -3,6 +3,7 @@ library(SnowballC)
 library(readr)
 library(stringr)
 library(XML)
+library(RTextTools)
 
 jamaTexts <- list(title=character(), abstract=character(), keywords=list(), year=numeric(), month=numeric(), publication.types=list())
 nejmTexts <- list(title=character(), abstract=character(), keywords=list(), year=numeric(), month=numeric(), publication.types=list())
@@ -212,6 +213,9 @@ abstract.texts.with.clinical.trial <-tm_map(abstract.texts.with.clinical.trial, 
 
 
 myMat <- DocumentTermMatrix(title.texts)
+
+#
+myMat <- create_matrix(title.texts,ngramLength=2)
 
 matrix.colsums <- colSums(inspect(myMat))
 matrix.rowsums <- rowSums(inspect(myMat))
