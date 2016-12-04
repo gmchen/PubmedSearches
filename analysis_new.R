@@ -117,105 +117,169 @@ plot(1976:2015, year.counts.with.case.report)
 
 # create a corpus for each year of title texts of clinical trials
 
-title.texts.with.clinical.trial <- NULL
-for(year in 1976:2015) {
-  is.clinical.trial <- sapply(texts$publication.types[texts$year == year], function(pubtypes) any(clinical.trial.pubtypes %in% pubtypes))
-  current.corpus.texts <- texts$title[texts$year == year][is.clinical.trial]
-  toAdd <- Corpus(VectorSource(paste(current.corpus.texts, collapse = " ")))
-  meta(toAdd, "id", "local") <- paste0("Title_text_clinical_trial_", year)
-  if(is.null(title.texts.with.clinical.trial)) {
-    title.texts.with.clinical.trial <- toAdd
-  } else {
-    title.texts.with.clinical.trial <- c(title.texts.with.clinical.trial, toAdd)
+corpusTexts <- list(jama=list(), nejm=list())
+
+for(journalName in c("jama", "nejm")) {
+  if(journalName == "jama") {
+    texts <- jamaTexts
+  } else if (journalName == "nejm") {
+    texts <- nejmTexts
   }
+  
+  is.clinical.trial <- sapply(texts$publication.types, function(pubtypes) any(clinical.trial.pubtypes %in% pubtypes))
+  is.not.clinical.trial <- !is.clinical.trial
+  is.case.report <- sapply(texts$publication.types, function(pubtypes) "Case Reports" %in% pubtypes)
+  
+  textsToInclude <- list(
+              all=rep(TRUE, length(texts$year)),
+              clinical.trials=is.clinical.trial,
+              non.clinical.trials=is.not.clinical.trial,
+              case.reports=is.case.report)
+  
+  corpusTexts[[journalName]]  <- lapply(c("title", "abstract"), function(titleOrAbstract){
+      sublistToReturn <- lapply(names(textsToInclude), function(textTypeToInclude) {
+        includeVector <- textsToInclude[[textTypeToInclude]]
+        corpusToReturn <- NULL
+        for(year in 1976:2015) {
+          if(titleOrAbstract == "title") {
+            current.corpus.texts <- texts$title[texts$year == year & includeVector]
+          } else if(titleOrAbstract == "abstract") {
+            current.corpus.texts <- texts$abstract[texts$year == year & includeVector]
+          }
+          toAdd <- Corpus(VectorSource(paste(current.corpus.texts, collapse = " ")))
+          meta(toAdd, "id", "local") <- paste0(titleOrAbstract, "_", textTypeToInclude, "_", year)
+          if(is.null(corpusToReturn)) {
+            corpusToReturn <- toAdd
+          } else {
+            corpusToReturn <- c(corpusToReturn, toAdd)
+          }
+        }
+        return(corpusToReturn)
+      })
+      names(sublistToReturn) <- names(textsToInclude)
+      return(sublistToReturn)
+    })
+  names(corpusTexts[[journalName]]) <- c("title", "abstract")
 }
+  
 
-# To lowercase
-title.texts.case.report <- tm_map(title.texts.case.report, content_transformer(tolower))
-# Remove punctuation
-title.texts.case.report <-tm_map(title.texts.case.report, removePunctuation)
-
-title.texts.case.report <- NULL
-for(year in 1976:2015) {
-  is.case.report <- sapply(texts$publication.types[texts$year == year], function(pubtypes) "Case Reports" %in% pubtypes)
-  current.corpus.texts <- texts$title[texts$year == year][is.clinical.trial]
-  toAdd <- Corpus(VectorSource(paste(current.corpus.texts, collapse = " ")))
-  meta(toAdd, "id", "local") <- paste0("Title_text_case_report_", year)
-  if(is.null(title.texts.case.report)) {
-    title.texts.case.report <- toAdd
-  } else {
-    title.texts.case.report <- c(title.texts.case.report, toAdd)
+##############################################################
+  title.texts.with.clinical.trial <- NULL
+  for(year in 1976:2015) {
+    is.clinical.trial <- sapply(texts$publication.types[texts$year == year], function(pubtypes) any(clinical.trial.pubtypes %in% pubtypes))
+    current.corpus.texts <- texts$title[texts$year == year][is.clinical.trial]
+    toAdd <- Corpus(VectorSource(paste(current.corpus.texts, collapse = " ")))
+    meta(toAdd, "id", "local") <- paste0("Title_text_clinical_trial_", year)
+    if(is.null(title.texts.with.clinical.trial)) {
+      title.texts.with.clinical.trial <- toAdd
+    } else {
+      title.texts.with.clinical.trial <- c(title.texts.with.clinical.trial, toAdd)
+    }
   }
-}
-
-# To lowercase
-title.texts.case.report <- tm_map(title.texts.case.report, content_transformer(tolower))
-# Remove punctuation
-title.texts.case.report <-tm_map(title.texts.case.report, removePunctuation)
-
-title.texts.excluding.clinical.trials <- NULL
-for(year in 1976:2015) {
-  is.clinical.trial <- sapply(texts$publication.types[texts$year == year], function(pubtypes) any(clinical.trial.pubtypes %in% pubtypes))
-  current.corpus.texts <- texts$title[texts$year == year][!is.clinical.trial]
-  toAdd <- Corpus(VectorSource(paste(current.corpus.texts, collapse = " ")))
-  meta(toAdd, "id", "local") <- paste0("Title_text_excluding_clinical_trials_", year)
-  if(is.null(title.texts.excluding.clinical.trials)) {
-    title.texts.excluding.clinical.trials <- toAdd
-  } else {
-    title.texts.excluding.clinical.trials <- c(title.texts.excluding.clinical.trials, toAdd)
+  # To lowercase
+  title.texts.with.clinical.trial <- tm_map(title.texts.with.clinical.trial, content_transformer(tolower))
+  # Remove punctuation
+  title.texts.with.clinical.trial <-tm_map(title.texts.with.clinical.trial, removePunctuation)
+  corpusTexts[[journalName]]$title.texts.with.clinical.trial <- title.texts.with.clinical.trial
+  
+  title.texts.case.report <- NULL
+  for(year in 1976:2015) {
+    is.case.report <- sapply(texts$publication.types[texts$year == year], function(pubtypes) "Case Reports" %in% pubtypes)
+    current.corpus.texts <- texts$title[texts$year == year][is.case.report]
+    toAdd <- Corpus(VectorSource(paste(current.corpus.texts, collapse = " ")))
+    meta(toAdd, "id", "local") <- paste0("Title_text_case_report_", year)
+    if(is.null(title.texts.case.report)) {
+      title.texts.case.report <- toAdd
+    } else {
+      title.texts.case.report <- c(title.texts.case.report, toAdd)
+    }
   }
-}
-
-# To lowercase
-title.texts.excluding.clinical.trials <- tm_map(title.texts.excluding.clinical.trials, content_transformer(tolower))
-# Remove punctuation
-title.texts.excluding.clinical.trials <-tm_map(title.texts.excluding.clinical.trials, removePunctuation)
-
-abstract.texts.with.clinical.trial <- NULL
-for(year in 1976:2015) {
-  is.clinical.trial <- sapply(texts$publication.types[texts$year == year], function(pubtypes) any(clinical.trial.pubtypes %in% pubtypes))
-  has.abstract <- unlist(sapply(texts$abstract[texts$year == year], function(abstract) paste(unlist(abstract), collapse=" ") != "NA"))
-  current.corpus.texts <- paste(unlist(texts$abstract[[is.clinical.trial & has.abstract]]), collapse=" ")
-  toAdd <- Corpus(VectorSource(paste(current.corpus.texts, collapse = " ")))
-  meta(toAdd, "id", "local") <- paste0("Abstract_text_clinical_trial_", year)
-  if(is.null(abstract.texts.with.clinical.trial)) {
-    abstract.texts.with.clinical.trial <- toAdd
-  } else {
-    abstract.texts.with.clinical.trial <- c(abstract.texts.with.clinical.trial, toAdd)
+  # To lowercase
+  title.texts.case.report <- tm_map(title.texts.case.report, content_transformer(tolower))
+  # Remove punctuation
+  title.texts.case.report <-tm_map(title.texts.case.report, removePunctuation)
+  corpusTexts[[journalName]]$title.texts.case.report <- title.texts.case.report
+  
+  title.texts.excluding.clinical.trials <- NULL
+  for(year in 1976:2015) {
+    is.clinical.trial <- sapply(texts$publication.types[texts$year == year], function(pubtypes) any(clinical.trial.pubtypes %in% pubtypes))
+    current.corpus.texts <- texts$title[texts$year == year][!is.clinical.trial]
+    toAdd <- Corpus(VectorSource(paste(current.corpus.texts, collapse = " ")))
+    meta(toAdd, "id", "local") <- paste0("Title_text_excluding_clinical_trials_", year)
+    if(is.null(title.texts.excluding.clinical.trials)) {
+      title.texts.excluding.clinical.trials <- toAdd
+    } else {
+      title.texts.excluding.clinical.trials <- c(title.texts.excluding.clinical.trials, toAdd)
+    }
   }
-}
-
-title.texts <- NULL
-for(year in 1976:2015) {
-  toAdd <- Corpus(VectorSource(paste(texts$title[texts$year == year], collapse=" ")))
-  meta(toAdd, "id", "local") <- paste0("Title_text_", year)
-  if(is.null(title.texts)) {
-    title.texts <- toAdd
-  } else {
-    title.texts <- c(title.texts, toAdd)
+  # To lowercase
+  title.texts.excluding.clinical.trials <- tm_map(title.texts.excluding.clinical.trials, content_transformer(tolower))
+  # Remove punctuation
+  title.texts.excluding.clinical.trials <-tm_map(title.texts.excluding.clinical.trials, removePunctuation)
+  corpusTexts[[journalName]]$title.texts.excluding.clinical.trials <- title.texts.excluding.clinical.trials
+  
+  abstract.texts.with.clinical.trial <- NULL
+  for(year in 1976:2015) {
+    is.clinical.trial <- sapply(texts$publication.types[texts$year == year], function(pubtypes) any(clinical.trial.pubtypes %in% pubtypes))
+    has.abstract <- unlist(sapply(texts$abstract[texts$year == year], function(abstract) paste(unlist(abstract), collapse=" ") != "NA"))
+    current.corpus.texts <- paste(unlist(texts$abstract[texts$year == year][is.clinical.trial & has.abstract]), collapse=" ")
+    toAdd <- Corpus(VectorSource(paste(current.corpus.texts, collapse = " ")))
+    meta(toAdd, "id", "local") <- paste0("Abstract_text_clinical_trial_", year)
+    if(is.null(abstract.texts.with.clinical.trial)) {
+      abstract.texts.with.clinical.trial <- toAdd
+    } else {
+      abstract.texts.with.clinical.trial <- c(abstract.texts.with.clinical.trial, toAdd)
+    }
   }
-}
-# To lowercase
-title.texts <- tm_map(title.texts, content_transformer(tolower))
-# Remove punctuation
-title.texts <-tm_map(title.texts, removePunctuation)
+  # To lowercase
+  abstract.texts.with.clinical.trial <- tm_map(abstract.texts.with.clinical.trial, content_transformer(tolower))
+  # Remove punctuation
+  abstract.texts.with.clinical.trial <-tm_map(abstract.texts.with.clinical.trial, removePunctuation)
+  corpusTexts[[journalName]]$abstract.texts.with.clinical.trial <- abstract.texts.with.clinical.trial
+  
+  title.texts <- NULL
+  for(year in 1976:2015) {
+    toAdd <- Corpus(VectorSource(paste(texts$title[texts$year == year], collapse=" ")))
+    meta(toAdd, "id", "local") <- paste0("Title_text_", year)
+    if(is.null(title.texts)) {
+      title.texts <- toAdd
+    } else {
+      title.texts <- c(title.texts, toAdd)
+    }
+  }
+  # To lowercase
+  title.texts <- tm_map(title.texts, content_transformer(tolower))
+  # Remove punctuation
+  title.texts <-tm_map(title.texts, removePunctuation)
+  corpusTexts[[journalName]]$title.texts <- title.texts
+  corpusTexts[[journalName]]$title.texts <- title.texts
+  
+  abstract.texts <- NULL
+  for(year in 1976:2015) {
+    toAdd <- Corpus(VectorSource(paste(texts$abstract[texts$year == year], collapse=" ")))
+    meta(toAdd, "id", "local") <- paste0("abstract_text_", year)
+    if(is.null(abstract.texts)) {
+      abstract.texts <- toAdd
+    } else {
+      abstract.texts <- c(abstract.texts, toAdd)
+    }
+  }
+  # To lowercase
+  abstract.texts <- tm_map(abstract.texts, content_transformer(tolower))
+  # Remove punctuation
+  abstract.texts <-tm_map(abstract.texts, removePunctuation)
+  corpusTexts[[journalName]]$abstract.texts <- abstract.texts
+  corpusTexts[[journalName]]$abstract.texts <- abstract.texts
 
 
-# To lowercase
-title.texts.with.clinical.trial <- tm_map(title.texts.with.clinical.trial, content_transformer(tolower))
-# Remove punctuation
-title.texts.with.clinical.trial <-tm_map(title.texts.with.clinical.trial, removePunctuation)
-# To lowercase
-abstract.texts.with.clinical.trial <- tm_map(abstract.texts.with.clinical.trial, content_transformer(tolower))
-# Remove punctuation
-abstract.texts.with.clinical.trial <-tm_map(abstract.texts.with.clinical.trial, removePunctuation)
-
-
-
-myMat <- DocumentTermMatrix(title.texts)
+myMat <- DocumentTermMatrix(title.texts.case.report)
 
 #
-myMat <- create_matrix(title.texts,ngramLength=2)
+BigramTokenizer <- function(x) 
+  unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE)
+
+myMat <- TermDocumentMatrix(title.texts.case.report, control = list(tokenize = BigramTokenizer))
+myMat <- t(myMat)
 
 matrix.colsums <- colSums(inspect(myMat))
 matrix.rowsums <- rowSums(inspect(myMat))
@@ -240,9 +304,9 @@ fdr.adj.year.pvals <- p.adjust(year.pvals, method="fdr")
 sig.year.coefficients <- year.coefficients[fdr.adj.year.pvals < 0.01]
 sort(sig.year.coefficients)
 
-barplot(myTDMHiFreq.per.1000[,"diabetic"])
+barplot(myTDMHiFreq.per.1000[,"patient with"])
 
-current.freq.per.1000 <- myTDMHiFreq.per.1000[,"diabetic"]
+current.freq.per.1000 <- myTDMHiFreq.per.1000[,"the elderly"]
 
 barplot.df.to.plot <- data.frame(
                               freq.per.1000 = current.freq.per.1000,
@@ -284,7 +348,7 @@ ggplot(barplot.df.to.plot, aes(x = year, y = freq.per.1000)) +
   theme(panel.grid.major = element_blank())
 
 # do this barplot in chunks of five years
-barplot(tapply(myTDMHiFreq[,"from"], (seq_along(myTDMHiFreq[,"from"])-1) %/% 5, sum))
+barplot(tapply(myTDMHiFreq.per.1000[,"from"], (seq_along(myTDMHiFreq.per.1000[,"from"])-1) %/% 5, sum))
 
 # find all words after "among"
 out <- sapply(title.texts, function(x) unlist(str_extract_all(x$content, '(?<=among\\s)\\w+')))
