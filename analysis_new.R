@@ -1,78 +1,93 @@
 library(tm)
 library(SnowballC)
 library(readr)
+library(stringr)
 library(XML)
 
-texts <- list(title=character(), abstract=character(), keywords=list(), year=numeric(), month=numeric(), publication.types=list())
+jamaTexts <- list(title=character(), abstract=character(), keywords=list(), year=numeric(), month=numeric(), publication.types=list())
+nejmTexts <- list(title=character(), abstract=character(), keywords=list(), year=numeric(), month=numeric(), publication.types=list())
 
 # Load data from xml
 for(year in 1976:2015) {
   yearIndex <- year - 1975
   for(month in 1:12) {
-    print(paste("Parsing year", year, "and month", month))
-    current.xml.text <- read_file(paste0("Pubmed_JAMA/xml/", year, "_", month, ".xml"))
-    
-    current.xml.text.split <- str_split(current.xml.text,  "(?=\\<\\?xml version\\=)")[[1]]
-    current.xml.text.split <- current.xml.text.split[current.xml.text.split != ""]
-    xml.text.lists <- lapply(current.xml.text.split, xmlToList)
-    xml.text.list <- do.call(c, xml.text.lists)
-    
-    get_from_list <- function(my.list, my.named.subval) {
-        val <- tryCatch({
-          my.list[[my.named.subval]]
-        }, error = function(e) {
-          NA
-        })
-        return(val)
-    }
-    current.titles <- unname(sapply(xml.text.list, get_from_list, c("MedlineCitation", "Article", "ArticleTitle")))
-    
-    current.abstract.lists <- sapply(xml.text.list, get_from_list, c("MedlineCitation", "Article", "Abstract"))
-    
-    current.abstract.lists <- lapply(xml.text.list, get_from_list, c("MedlineCitation", "Article", "Abstract"))
-    # Sometimes $AbstractText is a character vector, sometimes is a list with $text character vectors
-    current.abstracts <- sapply(current.abstract.lists, function(x) {
-      if(is.null(x)) {
-        return(NULL)
+    for(journalName in c("jama", "nejm")) {
+      print(paste("Parsing year", year, "and month", month))
+      if(journalName == "jama") {
+        current.xml.text <- read_file(paste0("Pubmed_JAMA/xml/", year, "_", month, ".xml"))
+      } else if(journalName == "nejm") {
+        current.xml.text <- read_file(paste0("Pubmed_NEJM/xml/", year, "_", month, ".xml"))
       }
-      if(is.character(x$AbstractText)) {
-        return(x$AbstractText)
-      }
-      if(is.list(x$AbstractText)) {
-        return(paste(sapply(x, function(y) y$text), collapse=" "))
-      }
-      else{
-        stop("Found an AbstractText field that is neither null, a character, or a list")
-        }
-      })
-        
       
-    
-    current.keywords <- unname(lapply(xml.text.list, get_from_list, c("MedlineCitation", "MeshHeadingList")))
-    current.keywords <- lapply(current.keywords, function(x) sapply(x, get_from_list, c("DescriptorName", "text")))
-    
-    current.years <- unname(lapply(xml.text.list, get_from_list, c("PubmedData", "History", "PubMedPubDate", "Year")))
-    current.years <- as.numeric(current.years)
-    current.months <- unname(lapply(xml.text.list, get_from_list, c("PubmedData", "History", "PubMedPubDate", "Month")))
-    current.months <- as.numeric(current.months)
-    current.publication.types <- unname(lapply(xml.text.list, get_from_list,c("MedlineCitation", "Article", "PublicationTypeList")))
-    current.publication.types <- lapply(current.publication.types, function(x) sapply(x, get_from_list,"text"))
-    
-    # check that all lengths are equal
-    current.length <- length(current.titles)
-    if(current.length != length(current.abstracts) ||
-       current.length != length(current.keywords) || 
-       current.length != length(current.years) ||
-       current.length != length(current.months) ||
-       current.length != length(current.publication.types)) {
-        stop("Not all lists are equal length")
+      current.xml.text.split <- str_split(current.xml.text,  "(?=\\<\\?xml version\\=)")[[1]]
+      current.xml.text.split <- current.xml.text.split[current.xml.text.split != ""]
+      xml.text.lists <- lapply(current.xml.text.split, xmlToList)
+      xml.text.list <- do.call(c, xml.text.lists)
+      
+      get_from_list <- function(my.list, my.named.subval) {
+          val <- tryCatch({
+            my.list[[my.named.subval]]
+          }, error = function(e) {
+            NA
+          })
+          return(val)
       }
-    vals.to.add <- list(title=current.titles, abstract=current.abstracts, keywords=current.keywords, year=current.years, month=current.months, publication.types=current.publication.types)
-    
-    texts <- lapply(names(vals.to.add),function(x) c(texts[[x]],vals.to.add[[x]]))
-    names(texts)<-names(vals.to.add)
+      current.titles <- unname(sapply(xml.text.list, get_from_list, c("MedlineCitation", "Article", "ArticleTitle")))
+      
+      current.abstract.lists <- sapply(xml.text.list, get_from_list, c("MedlineCitation", "Article", "Abstract"))
+      
+      current.abstract.lists <- lapply(xml.text.list, get_from_list, c("MedlineCitation", "Article", "Abstract"))
+      # Sometimes $AbstractText is a character vector, sometimes is a list with $text character vectors
+      current.abstracts <- sapply(current.abstract.lists, function(x) {
+        if(is.null(x)) {
+          return(NULL)
+        }
+        if(is.character(x$AbstractText)) {
+          return(x$AbstractText)
+        }
+        if(is.list(x$AbstractText)) {
+          return(paste(sapply(x[(names(x) == "AbstractText")], function(y) y$text), collapse=" "))
+        }
+        else{
+          stop("Found an AbstractText field that is neither null, a character, or a list")
+          }
+        })
+          
+      current.keywords <- unname(lapply(xml.text.list, get_from_list, c("MedlineCitation", "MeshHeadingList")))
+      current.keywords <- lapply(current.keywords, function(x) sapply(x, get_from_list, c("DescriptorName", "text")))
+      
+      current.years <- unname(lapply(xml.text.list, get_from_list, c("PubmedData", "History", "PubMedPubDate", "Year")))
+      current.years <- as.numeric(current.years)
+      current.months <- unname(lapply(xml.text.list, get_from_list, c("PubmedData", "History", "PubMedPubDate", "Month")))
+      current.months <- as.numeric(current.months)
+      current.publication.types <- unname(lapply(xml.text.list, get_from_list,c("MedlineCitation", "Article", "PublicationTypeList")))
+      current.publication.types <- lapply(current.publication.types, function(x) sapply(x, get_from_list,"text"))
+      
+      # check that all lengths are equal
+      current.length <- length(current.titles)
+      if(current.length != length(current.abstracts) ||
+         current.length != length(current.keywords) || 
+         current.length != length(current.years) ||
+         current.length != length(current.months) ||
+         current.length != length(current.publication.types)) {
+          stop("Not all lists are equal length")
+        }
+      vals.to.add <- list(title=current.titles, abstract=current.abstracts, keywords=current.keywords, year=current.years, month=current.months, publication.types=current.publication.types)
+      
+      if(journalName == "jama") {
+        jamaTexts <- lapply(names(vals.to.add),function(x) c(jamaTexts[[x]],vals.to.add[[x]]))
+        names(jamaTexts)<-names(vals.to.add)
+      } else if(journalName == "nejm") {
+        nejmTexts <- lapply(names(vals.to.add),function(x) c(nejmTexts[[x]],vals.to.add[[x]]))
+        names(nejmTexts)<-names(vals.to.add)
+      }
+    }
   }
 }
+
+save(jamaTexts, file="jamaTexts.RData")
+save(nejmTexts, file="nejmTexts.RData")
+
 #unique(sort(unlist(texts$publication.types)))
 clinical.trial.pubtypes <- c("Clinical Trial",                                
                              "Clinical Trial, Phase I",                               
