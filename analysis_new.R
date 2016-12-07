@@ -7,6 +7,7 @@ library(RTextTools)
 library(reshape2)
 library(wordcloud)
 library(scales)
+library(openNLP)
 
 jamaTexts <- list(title=character(), abstract=character(), keywords=list(), year=numeric(), month=numeric(), publication.types=list())
 nejmTexts <- list(title=character(), abstract=character(), keywords=list(), year=numeric(), month=numeric(), publication.types=list())
@@ -397,6 +398,54 @@ dev.off()
 
 pdf("figures/jama_title_barplot_older_adults.pdf", width = 4, height = 4)
 get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "older adults")
+dev.off()
+
+pdf("figures/jama_title_barplot_diabetes.pdf", width = 4, height = 4)
+get.barplot(frequencyAnalysis$jama$title$all$monogram$TDMHiFreq.per.1000, "diabetes")
+dev.off()
+
+pdf("figures/jama_title_barplot_diabetic.pdf", width = 4, height = 4)
+get.barplot(frequencyAnalysis$jama$title$all$monogram$TDMHiFreq.per.1000, "diabetic", direction = "negative")
+dev.off()
+
+article.indices.with.diabetic <- grep("[Dd]iabetic", jamaTexts$title)
+article.titles.with.diabetic <- jamaTexts$title[article.indices.with.diabetic]
+article.year.with.diabetic <- jamaTexts$year[article.indices.with.diabetic]
+
+writeLines(unique(article.titles.with.diabetic[1:20]))
+
+writeLines(unique(article.titles.with.diabetic)[145:164])
+
+article.indices.with.diabetes <- grep("[Dd]iabetes", jamaTexts$title)
+article.titles.with.diabetes <- jamaTexts$title[article.indices.with.diabetes]
+article.year.with.diabetes <- jamaTexts$year[article.indices.with.diabetes]
+
+writeLines(head(unique(article.titles.with.diabetes), 20))
+writeLines(tail(unique(article.titles.with.diabetes), 22))
+
+# caused by, cause of
+pdf("figures/jama_title_barplot_caused_by.pdf", width = 4, height = 4)
+get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "caused by", direction = "negative")
+dev.off()
+
+pdf("figures/jama_title_barplot_cause_of.pdf", width = 4, height = 4)
+get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "cause of", direction = "negative")
+dev.off()
+
+pdf("figures/jama_title_barplot_kidney_disease.pdf", width = 4, height = 4)
+get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "kidney disease")
+dev.off()
+
+pdf("figures/jama_title_barplot_renal_failure.pdf", width = 4, height = 4)
+get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "renal failure", direction = "negative")
+dev.off()
+
+pdf("figures/jama_title_barplot_mental_health.pdf", width = 4, height = 4)
+get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "mental health")
+dev.off()
+
+pdf("figures/jama_title_barplot_poststraumatic_stress.pdf", width = 4, height = 4)
+get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "posttraumatic stress")
 dev.off()
 
 #current.conf.ints <- lapply(1:nrow(myTDMHiFreq.per.1000), function(x) {
