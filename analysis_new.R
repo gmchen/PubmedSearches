@@ -10,18 +10,28 @@ library(scales)
 library(openNLP)
 
 jamaTexts <- list(title=character(), abstract=character(), keywords=list(), year=numeric(), month=numeric(), publication.types=list())
+annalsTexts <- list(title=character(), abstract=character(), keywords=list(), year=numeric(), month=numeric(), publication.types=list())
 nejmTexts <- list(title=character(), abstract=character(), keywords=list(), year=numeric(), month=numeric(), publication.types=list())
+lancetTexts <- list(title=character(), abstract=character(), keywords=list(), year=numeric(), month=numeric(), publication.types=list())
+bmjTexts <- list(title=character(), abstract=character(), keywords=list(), year=numeric(), month=numeric(), publication.types=list())
 
 # Load data from xml
 for(year in 1976:2015) {
   yearIndex <- year - 1975
   for(month in 1:12) {
-    for(journalName in c("jama", "nejm")) {
+    #for(journalName in c("jama", "annals", "nejm", "lancet", "bmj")) {
+    for(journalName in c("bmj")) {
       print(paste("Parsing year", year, "and month", month))
       if(journalName == "jama") {
         current.xml.text <- read_file(paste0("Pubmed_JAMA/xml/", year, "_", month, ".xml"))
+      } else if(journalName == "annals") {
+        current.xml.text <- read_file(paste0("Pubmed_Annals_Intern_Med/xml/", year, "_", month, ".xml"))
       } else if(journalName == "nejm") {
         current.xml.text <- read_file(paste0("Pubmed_NEJM/xml/", year, "_", month, ".xml"))
+      } else if(journalName == "lancet") {
+        current.xml.text <- read_file(paste0("Pubmed_LANCET/xml/", year, "_", month, ".xml"))
+      } else if(journalName == "bmj") {
+        current.xml.text <- read_file(paste0("Pubmed_BMJ//xml/", year, "_", month, ".xml"))
       }
       
       current.xml.text.split <- str_split(current.xml.text,  "(?=\\<\\?xml version\\=)")[[1]]
@@ -84,16 +94,38 @@ for(year in 1976:2015) {
       if(journalName == "jama") {
         jamaTexts <- lapply(names(vals.to.add),function(x) c(jamaTexts[[x]],vals.to.add[[x]]))
         names(jamaTexts)<-names(vals.to.add)
+      } else if(journalName == "annals") {
+        annalsTexts <- lapply(names(vals.to.add),function(x) c(annalsTexts[[x]],vals.to.add[[x]]))
+        names(annalsTexts)<-names(vals.to.add)
       } else if(journalName == "nejm") {
         nejmTexts <- lapply(names(vals.to.add),function(x) c(nejmTexts[[x]],vals.to.add[[x]]))
         names(nejmTexts)<-names(vals.to.add)
+      } else if(journalName == "lancet") {
+        lancetTexts <- lapply(names(vals.to.add),function(x) c(lancetTexts[[x]],vals.to.add[[x]]))
+        names(lancetTexts)<-names(vals.to.add)
+      } else if(journalName == "bmj") {
+        bmjTexts <- lapply(names(vals.to.add),function(x) c(bmjTexts[[x]],vals.to.add[[x]]))
+        names(bmjTexts)<-names(vals.to.add)
       }
     }
   }
 }
 
+if(length(unlist(lancetTexts$title)) != length(lancetTexts$title)) {
+  stop("Found Lancet title that is not a list of length 1")  
+}
+if(length(unlist(bmjTexts$title)) != length(bmjTexts$title)) {
+  stop("Found BMJ title that is not a list of length 1")  
+}
+
+lancetTexts$title <- unlist(lancetTexts$title)
+bmjTexts$title <- unlist(bmjTexts$title)
+
 save(jamaTexts, file="jamaTexts.RData")
 save(nejmTexts, file="nejmTexts.RData")
+save(annalsTexts, file="annalsTexts.RData")
+save(lancetTexts, file="lancetTexts.RData")
+save(bmjTexts, file="bmjTexts.RData")
 
 #unique(sort(unlist(texts$publication.types)))
 clinical.trial.pubtypes <- c("Clinical Trial",                                
@@ -110,40 +142,160 @@ clinical.trial.pubtypes <- c("Clinical Trial",
                              "Evaluation Studies",
                              "Controlled Clinical Trial")
 
-year.counts.with.clinical.trial <- sapply(1976:2015, function(year) {
-  mean(sapply(jamaTexts$publication.types[jamaTexts$year == year], function(pubtypes) any(clinical.trial.pubtypes %in% pubtypes)))
-  })
-plot(1976:2015, year.counts.with.clinical.trial)
+clinical.trial.exclusion.pubtypes <- c("Editorial",
+                                       "News",
+                                       "Historical Article",
+                                       "Case Reports",
+                                       "Review",
+                                       "Congresses",
+                                       "Guideline",
+                                       "Practice Guideline")
 
-year.counts.with.case.report <- sapply(1976:2015, function(year) {
-  mean(sapply(jamaTexts$publication.types[jamaTexts$year == year], function(pubtypes) "Case Reports" %in% pubtypes))
-  })
-plot(1976:2015, year.counts.with.case.report)
-
-pubtype.fig.df <- data.frame(clinical.trial=year.counts.with.clinical.trial, case.report=year.counts.with.case.report, year=1976:2015)
-pubtype.fig.df.m <- melt(pubtype.fig.df, id="year")
-colnames(pubtype.fig.df.m) <- c("year", "PublicationType", "Frequency")
-
-pdf("figures/jama_pubtypes.pdf", width=6, height=4.5)
-ggplot(pubtype.fig.df.m, aes(x = year, y = Frequency, colour=factor(PublicationType))) +  
-  geom_point(stat="identity") + 
-  scale_colour_manual(values=c("#045a8d", "#bd0026"), name="Publication Type", labels=c("Clinical Trial", "Case Report")) +
-  geom_smooth(aes(colour=factor(PublicationType)),method = loess, method.args = list(family = "symmetric"), show.legend = FALSE) + 
-  ggtitle("Clinical Trials vs Case Reports in JAMA") + # plot title
-  xlab("Year") + 
-  ylab("Frequency") +
-  scale_y_continuous(labels = percent_format()) +
-  theme_bw() +
-  theme(panel.grid.major = element_blank())
-dev.off()
-
-# create a corpus for each year of title texts of clinical trials
-
-corpusTexts <- list(jama=list(), nejm=list())
-
-for(journalName in c("jama", "nejm")) {
+## Save files for manual inspection
+for(journalName in c("jama", "nejm", "lancet")) {
+  
   if(journalName == "jama") {
     texts <- jamaTexts
+  } else if (journalName == "nejm") {
+    texts <- nejmTexts
+  } else if (journalName == "lancet") {
+    texts <- lancetTexts
+  }
+  # clinical trials texts_for_review
+  for(year in 1976:2015) {
+      write.table(
+        data.frame("", unique(texts$title[texts$year==year])),
+        file = paste0("texts_for_review/", journalName, "/", journalName, "_all_titles_", year, ".csv"), 
+        col.names = FALSE,
+        row.names = FALSE,
+        sep=",")
+  }
+  
+  # 5 year intervals
+  for(yearstart in c(1976, 1981, 1986, 1991, 1996, 2001, 2006, 2011)) {
+    is.clinical.trial <- sapply(texts$publication.types, function(pubtypes) any(clinical.trial.pubtypes %in% pubtypes) & !any(clinical.trial.exclusion.pubtypes %in% pubtypes)  )
+    is.case.report <- sapply(texts$publication.types, function(pubtypes) "Case Reports" %in% pubtypes)
+    write.table(
+      data.frame("", unique(texts$title[texts$year >= yearstart & texts$year <= yearstart+4 & is.clinical.trial])),
+      file = paste0("texts_for_review/", journalName, "/", journalName, "_clinical_trial_titles_", yearstart, "-", yearstart+4, ".csv"),
+      col.names=FALSE,
+      row.names=FALSE,
+      sep=",")
+    write.table(
+      data.frame("", unique(texts$title[texts$year >= yearstart & texts$year <= yearstart+4 & is.case.report])),
+      file = paste0("texts_for_review/", journalName, "/", journalName, "_case_report_titles_", yearstart, "-", yearstart+4, ".csv"),
+      col.names=FALSE,
+      row.names=FALSE,
+      sep=",")
+    
+  }
+}
+
+# Publication type plots
+for(journalName in c("jama", "annals", "nejm")) {
+  if(journalName == "jama") {
+    journalNameTitle <- "JAMA"
+    texts <- jamaTexts
+  } else if (journalName == "annals") {
+    journalNameTitle <- "Annals of Internal Medicine"
+    texts <- annalsTexts
+  } else if (journalName == "nejm") {
+    journalNameTitle <- "the New England Journal of Medicine"
+    texts <- nejmTexts
+  }
+  year.counts.with.clinical.trial <- sapply(1976:2015, function(year) {
+    mean(sapply(texts$publication.types[texts$year == year], function(pubtypes) any(clinical.trial.pubtypes %in% pubtypes)))
+    })
+  plot(1976:2015, year.counts.with.clinical.trial)
+  
+  year.counts.with.case.report <- sapply(1976:2015, function(year) {
+    mean(sapply(texts$publication.types[texts$year == year], function(pubtypes) "Case Reports" %in% pubtypes))
+    })
+  plot(1976:2015, year.counts.with.case.report)
+  
+  pubtype.fig.df <- data.frame(clinical.trial=year.counts.with.clinical.trial, case.report=year.counts.with.case.report, year=1976:2015)
+  pubtype.fig.df.m <- melt(pubtype.fig.df, id="year")
+  colnames(pubtype.fig.df.m) <- c("year", "PublicationType", "Frequency")
+  
+  
+  publication.type.plot <- ggplot(pubtype.fig.df.m, aes(x = year, y = Frequency, colour=factor(PublicationType))) +  
+    geom_point(stat="identity") + 
+    scale_colour_manual(values=c("#045a8d", "#bd0026"), name="Publication Type", labels=c("Clinical Trial", "Case Report")) +
+    geom_smooth(aes(colour=factor(PublicationType)),method = loess, method.args = list(family = "symmetric"), show.legend = FALSE) + 
+    ggtitle(paste0("Clinical Trials vs Case Reports in ", journalNameTitle)) + # plot title
+    xlab("Year") + 
+    ylab("Frequency") +
+    scale_y_continuous(labels = percent_format()) +
+    theme_bw() +
+    theme(panel.grid.major = element_blank())
+  
+  ggsave(paste0("figures/", journalName, "_pubtypes.pdf"), publication.type.plot, width=6, height=4.5)
+}
+
+# Make file for raters
+rater.file.merged.df <- do.call(rbind, lapply(c("jama", "lancet", "nejm", "annals", "bmj"), function(journalName) {
+  if(journalName == "jama") {
+    texts <- jamaTexts
+  } else if (journalName == "lancet") {
+    texts <- lancetTexts
+  } else if (journalName == "nejm") {
+    texts <- nejmTexts
+  } else if (journalName == "annals") {
+    texts <- annalsTexts
+  } else if (journalName == "bmj") {
+    texts <- bmjTexts
+  }
+  is.clinical.trial <- sapply(texts$publication.types, function(pubtypes) any(clinical.trial.pubtypes %in% pubtypes) & !any(clinical.trial.exclusion.pubtypes %in% pubtypes)  )
+  year.range <- c(1976:1980, 2011:2015)
+  to.include <- texts$year %in% year.range & is.clinical.trial
+  
+  current.data.frame <- data.frame(
+    rater1="",
+    rater2="", 
+    title=texts$title[to.include],
+    year=texts$year[to.include],
+    journal=journalName,
+    stringsAsFactors = FALSE)
+  return(current.data.frame)
+  }))
+
+set.seed(1000)
+#rater.file.merged.df <- rater.file.merged.df[sample(nrow(rater.file.merged.df)),]
+
+# TODO: add male female donor
+rater.file.merged.df$prediction <- sapply(rater.file.merged.df$title, function(title) 
+  grepl(paste(c("patient", "adult", "women", " men[^A-Za-z]", "child", "infant"), collapse = "|"),
+        title, ignore.case = TRUE))
+rater.file.merged.df$rater1[rater.file.merged.df$prediction] <- "p"
+
+write.table(
+  rater.file.merged.df,
+  file = "journal_titles.csv",
+  row.names=FALSE,
+  sep=",")
+
+df.for.barplot <- data.frame(proportion=numeric(), timeframe=factor(levels=c("early", "late")), journal=character())
+
+for(journalName in c("jama", "lancet", "nejm", "annals", "bmj")) {
+  numPatientCenteredEarly <- mean(rater.file.merged.df$rater1[rater.file.merged.df$year %in% 1976:1980 & rater.file.merged.df$journal == journalName] == "p")
+  numPatientCenteredLate <- mean(rater.file.merged.df$rater1[rater.file.merged.df$year %in% 2011:2015 & rater.file.merged.df$journal == journalName] == "p")
+  df.to.add <- data.frame(
+    proportion=c(numPatientCenteredEarly, numPatientCenteredLate),
+    timeframe=c("early", "late"),
+    journal=journalName)
+  df.for.barplot <- rbind(df.for.barplot, df.to.add)
+  
+}
+
+ggplot(data=df.for.barplot, aes(x=journal, y=proportion, fill=timeframe)) + geom_bar(stat='identity', position=position_dodge())
+
+corpusTexts <- list(jama=list(), annals=list(), nejm=list())
+
+for(journalName in c("jama", "annals", "nejm")) {
+  if(journalName == "jama") {
+    texts <- jamaTexts
+  } else if (journalName == "annals") {
+    texts <- annalsTexts
   } else if (journalName == "nejm") {
     texts <- nejmTexts
   }
@@ -173,7 +325,7 @@ for(journalName in c("jama", "nejm")) {
           } else if(titleOrAbstract == "abstract") {
             current.corpus.texts <- texts$abstract[texts$year == year & includeVector]
           }
-          toAdd <- Corpus(VectorSource(paste(current.corpus.texts, collapse = " ")))
+          toAdd <- Corpus(VectorSource(paste(current.corpus.texts, collapse = "\n")))
           meta(toAdd, "id", "local") <- paste0(titleOrAbstract, "_", textTypeToInclude, "_", year)
           if(is.null(corpusToReturn)) {
             corpusToReturn <- toAdd
