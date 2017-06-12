@@ -5,7 +5,7 @@ mkdir "$OUTDIR"
 mkdir "$OUTDIR/xml"
 echo "Pubmed access date: $DATE\n\n" > "$OUTDIR/out.log"
 cat eutils_queries.sh >> "$OUTDIR/out.log"
-for YEAR in {2015..1976}
+for YEAR in {1975..1966}
 do
 	for MONTH in {1..12}
 	do
