@@ -58,15 +58,15 @@ if(file.exists("jamaTexts.RData") &&
       for(journalName in c("bmj")) {
         print(paste("Parsing year", year, "and month", month))
         if(journalName == "jama") {
-          current.xml.text <- read_file(paste0("Pubmed_JAMA/xml/", year, "_", month, ".xml"))
+          current.xml.text <- read_file(paste0("../Pubmed_JAMA/xml/", year, "_", month, ".xml"))
         } else if(journalName == "annals") {
-          current.xml.text <- read_file(paste0("Pubmed_Annals_Intern_Med/xml/", year, "_", month, ".xml"))
+          current.xml.text <- read_file(paste0("../Pubmed_Annals_Intern_Med/xml/", year, "_", month, ".xml"))
         } else if(journalName == "nejm") {
-          current.xml.text <- read_file(paste0("Pubmed_NEJM/xml/", year, "_", month, ".xml"))
+          current.xml.text <- read_file(paste0("../Pubmed_NEJM/xml/", year, "_", month, ".xml"))
         } else if(journalName == "lancet") {
-          current.xml.text <- read_file(paste0("Pubmed_LANCET/xml/", year, "_", month, ".xml"))
+          current.xml.text <- read_file(paste0("../Pubmed_LANCET/xml/", year, "_", month, ".xml"))
         } else if(journalName == "bmj") {
-          current.xml.text <- read_file(paste0("Pubmed_BMJ//xml/", year, "_", month, ".xml"))
+          current.xml.text <- read_file(paste0("../Pubmed_BMJ/xml/", year, "_", month, ".xml"))
         }
         
         current.xml.text.split <- str_split(current.xml.text,  "(?=\\<\\?xml version\\=)")[[1]]
@@ -225,7 +225,7 @@ for(journalName in names(all.texts)) {
     texts <- bmjTexts
   }
   year.counts.with.clinical.trial <- sapply(1976:2015, function(year) {
-    mean(sapply(texts$publication.types, apply.clinical.trial.filters))
+    mean(sapply(texts$publication.types[texts$year == year], apply.clinical.trial.filters))
     })
   #plot(1976:2015, year.counts.with.clinical.trial)
   
@@ -274,6 +274,40 @@ publication.type.plots$lancet
 
 <<bmj_publication_types>>=
 publication.type.plots$bmj
+@
+
+<<save_files_for_manual_inspection, eval=FALSE>>=
+for(journalName in names(all.texts)) {
+  texts <- all.texts[[journalName]]
+  # clinical trials texts_for_review
+  for(year in 1976:2015) {
+      write.table(
+        data.frame("", unique(texts$title[texts$year==year])),
+        file = paste0("texts_for_review/", journalName, "/", journalName, "_all_titles_", year, ".csv"), 
+        col.names = FALSE,
+        row.names = FALSE,
+        sep=",")
+  }
+  
+  # 5 year intervals
+  for(yearstart in c(1976, 1981, 1986, 1991, 1996, 2001, 2006, 2011)) {
+    is.clinical.trial <- sapply(texts$publication.types, apply.clinical.trial.filters  )
+    is.case.report <- sapply(texts$publication.types, function(pubtypes) "Case Reports" %in% pubtypes)
+    write.table(
+      data.frame("", unique(texts$title[texts$year >= yearstart & texts$year <= yearstart+4 & is.clinical.trial])),
+      file = paste0("texts_for_review/", journalName, "/", journalName, "_clinical_trial_titles_", yearstart, "-", yearstart+4, ".csv"),
+      col.names=FALSE,
+      row.names=FALSE,
+      sep=",")
+    write.table(
+      data.frame("", unique(texts$title[texts$year >= yearstart & texts$year <= yearstart+4 & is.case.report])),
+      file = paste0("texts_for_review/", journalName, "/", journalName, "_case_report_titles_", yearstart, "-", yearstart+4, ".csv"),
+      col.names=FALSE,
+      row.names=FALSE,
+      sep=",")
+    
+  }
+}
 @
 
 <<generate_patient-centric_keywords_by_journal>>=
@@ -376,29 +410,24 @@ patient.keyword.df.for.barplot$journal <- factor(
 ggplot(data=patient.keyword.df.for.barplot, aes(x=journal, y=proportion, fill=timeframe)) +
       geom_bar(stat='identity', position=position_dodge()) + 
   #ggtitle("Proportion of clinical trial titles with patient-centric keywords") + 
-  scale_fill_manual(name="Time Period", values=c('#999999','#E69F00')) + 
+  scale_fill_manual(name="Time Period", values=c('gray','#E69F00')) + 
   theme_classic() + 
-  theme(plot.title = element_text(hjust=0.5, face="bold"), axis.text.y = element_text(size=15)) + 
-  scale_x_discrete(labels=c("JAMA", "Lancet", "Ann Intern Med.", "BMJ", "N Engl J Med.")) +
-  ylab("Proportion") + 
-  xlab("Journal Name")
+  theme(plot.title = element_text(hjust=0.5, face="bold"), axis.text.y = element_text(size=10)) + 
+  scale_x_discrete(labels=c("JAMA", "Lancet", "Ann Intern\nMed.", "BMJ", "N Engl J\nMed.")) +
+  scale_y_continuous(breaks=seq(0,0.6,0.1), limits=c(0,0.6), labels=percent_format()) +
+  ylab("Percent of titles containing a patient-centric keyword") +
+  xlab("")
 @
 
-<<get_corpus_texts_and_frequency_analysis, cache=TRUE>>=
+<<get_corpus_texts_and_frequency_analysis>>=
 if(file.exists("corpusTexts.RData") && file.exists("frequencyAnalysis.RData")) {
   load("corpusTexts.RData")
   load("frequencyAnalysis.RData")
   } else {
-  corpusTexts <- list(jama=list())
+  corpusTexts <- list(jama=list(), nejm=list(), annals=list(), lancet=list(), bmj=list())
   
-  for(journalName in c("jama")) {
-    if(journalName == "jama") {
-      texts <- jamaTexts
-    } else if (journalName == "annals") {
-      texts <- annalsTexts
-    } else if (journalName == "nejm") {
-      texts <- nejmTexts
-    }
+  for(journalName in names(all.texts)) {
+    texts <- all.texts[[journalName]]
     
     is.clinical.trial <- sapply(texts$publication.types, apply.clinical.trial.filters)
     is.not.clinical.trial <- !is.clinical.trial
@@ -413,7 +442,7 @@ if(file.exists("corpusTexts.RData") && file.exists("frequencyAnalysis.RData")) {
                 case.reports=is.case.report,
                 non.case.reports=!is.case.report)
     
-    corpusTexts[[journalName]]  <- lapply(c("title", "abstract"), function(titleOrAbstract){
+    corpusTexts[[journalName]]  <- lapply(c("title"), function(titleOrAbstract){
         sublistToReturn <- lapply(names(textsToInclude), function(textTypeToInclude) {
           includeVector <- textsToInclude[[textTypeToInclude]]
           corpusToReturn <- NULL
@@ -443,9 +472,10 @@ if(file.exists("corpusTexts.RData") && file.exists("frequencyAnalysis.RData")) {
         names(sublistToReturn) <- names(textsToInclude)
         return(sublistToReturn)
       })
-    names(corpusTexts[[journalName]]) <- c("title", "abstract")
+    #names(corpusTexts[[journalName]]) <- c("title", "abstract")
+    names(corpusTexts[[journalName]]) <- c("title")
   }
-  
+  save(corpusTexts, file="corpusTexts.RData")
   
   frequencyAnalysis <- lapply(corpusTexts, function(corpusTextByJournal) {
     lapply(corpusTextByJournal, function(corpusTextByTextType) {
@@ -465,24 +495,43 @@ if(file.exists("corpusTexts.RData") && file.exists("frequencyAnalysis.RData")) {
             year.term.count.sums <- matrix.rowsums
             freq.count.table <- data.frame(word=colnames(myMat), count=matrix.colsums)
             
-            # To avoid divide-by-zero errors, replace zero sums with 1. This variable is only used in the row-wise division.
             myTDMCounts <- inspect(myMat)
             
-            myMat.freq.per.1000 <- myTDMCounts * 1000 / matrix.rowsums
+            term.freq.per.100000 <- myTDMCounts * 100000 / matrix.rowsums
             
-            # only include terms that have occurred at least 1/10000 (0.01%) of the time
-            myTDMHiFreq.per.1000 <- myMat.freq.per.1000[,freq.count.table$count > 0.0001 * sum(freq.count.table$count)]
-            myTDMCountsHiFreq <- myTDMCounts[,freq.count.table$count > 0.0001 * sum(freq.count.table$count)]
+            # only include terms that have occurred at least 1/1000000 (0.01%) of the time
+            myTDMHiFreq.per.100000 <- term.freq.per.100000[,freq.count.table$count > 0.0001 * sum(freq.count.table$count)]
+           
+            # For monogram analysis, remove stopwords. Note that this happens after frequencies are calculated.
+            if(gramtype == "monogram") {
+              # remove stopwords
+              myTDMHiFreq.per.100000 <- myTDMHiFreq.per.100000[,!(colnames(myTDMHiFreq.per.100000) %in% removePunctuation(stopwords()))]
+              }
             
+             
             years <- 1976:2015
-            year.coefficients <- apply(myTDMHiFreq.per.1000, 2, function(y) coef(lm(y ~ years))["years"])
-            year.pvals <- apply(myTDMHiFreq.per.1000, 2, function(y) summary(lm(y ~ years))$coefficients[2,4])
+            lm.across.years <- apply(myTDMHiFreq.per.100000, 2, function(y) lm(y ~ years))
+            lm.coefficients <- sapply(lm.across.years, function(current.lm) coef(current.lm)[["years"]])
+            lm.95.percent.confints <- lapply(lm.across.years, function(current.lm) confint(current.lm)["years",])
+            lm.pvals <- sapply(lm.across.years, function(current.lm) summary(current.lm)$coefficients["years",4])
             
-            fdr.adj.year.pvals <- p.adjust(year.pvals, method="fdr")
+            fdr.adj.year.pvals <- p.adjust(lm.pvals, method="fdr")
             
-            sig.year.coefficients <- year.coefficients[fdr.adj.year.pvals < 0.01]
+            sig.lm.coefficients <- lm.coefficients[fdr.adj.year.pvals < 0.01]
+            sig.lm.95.percent.confints <- lm.95.percent.confints[fdr.adj.year.pvals < 0.01]
+            sig.fdr.adj.pvals <- fdr.adj.year.pvals[fdr.adj.year.pvals < 0.01]
+            sig.lm.pvals <- lm.pvals[fdr.adj.year.pvals < 0.01]
             
-            return(list(TDMHiFreq.per.1000=myTDMHiFreq.per.1000, sig.year.coefficients=sort(sig.year.coefficients)))
+            return(list(
+                    term.freq.per.100000=term.freq.per.100000,
+                    lm.coefficients=lm.coefficients,
+                    lm.95.percent.confints=lm.95.percent.confints,
+                    lm.pvals=lm.pvals,
+                    sig.lm.coefficients=sig.lm.coefficients,
+                    sig.lm.95.percent.confints=sig.lm.95.percent.confints,
+                    sig.fdr.adj.pvals=sig.fdr.adj.pvals,
+                    sig.lm.pvals=sig.lm.pvals
+                    ))
           })
           names(out.vals) <- c("monogram", "bigram")
           return(out.vals)
@@ -514,16 +563,34 @@ The cover.\\
 Council on Scientific Affairs\\
 From the NIH:
 
-For this analysis, we excluded the following words: "piece", "mind", "jama", "patient", "page", "cover", "council". A To-Do item is to compile an exhuastive list of these headers and remove them at the beginning of the analysis.
+<<get_tables_of_top_hits>>=
+monogram.coefficient.texts <- paste0(
+              sprintf("%.2f", frequencyAnalysis$jama$title$all$monogram$sig.lm.coefficients),
+              " (",
+              sprintf("%.2f", sapply(frequencyAnalysis$jama$title$all$monogram$sig.lm.95.percent.confints, `[[`, 1)),
+              ", ",
+              sprintf("%.2f", sapply(frequencyAnalysis$jama$title$all$monogram$sig.lm.95.percent.confints, `[[`, 2)),
+              ")")
 
+monogram.regression.df <- data.frame(
+                              term=names(frequencyAnalysis$jama$title$all$monogram$sig.lm.coefficients),
+                              coef.text=monogram.coefficient.texts,
+                              p.val=frequencyAnalysis$jama$title$all$monogram$sig.lm.pvals,
+                              fdr.adj.pvals=frequencyAnalysis$jama$title$all$monogram$sig.fdr.adj.pvals
+                          )
+
+rownames(monogram.regression.df) <- NULL
+
+monogram.regression.df <- monogram.regression.df[order(frequencyAnalysis$jama$title$all$monogram$sig.lm.coefficients),]
+@
 
 <<monogram_wordcloud_positive, fig.width=8, fig.height=8>>=
 
 #########################################################
 
 # First, get a list of significant hits in titles. Remove stopwords
-title.texts.all.significant.hits <- frequencyAnalysis$jama$title$all$monogram$sig.year.coefficients
-title.texts.all.significant.hits <- title.texts.all.significant.hits[!(names(title.texts.all.significant.hits) %in% stopwords())]
+title.texts.all.significant.hits <- frequencyAnalysis$jama$title$all$monogram$sig.lm.coefficients
+#title.texts.all.significant.hits <- title.texts.all.significant.hits[!(names(title.texts.all.significant.hits) %in% stopwords())]
 
 # Remove the words from journal-specific headings
 # TODO: remove these earlier on
@@ -543,7 +610,7 @@ title.texts.all.significant.hits <- title.texts.all.significant.hits[!(names(tit
 # Wordcloud for positive hits
 cool.colours <- c("#006d2c", "#0868ac", "#045a8d", "#016c59", "#253494")
 warm.colours <- c("#b30000", "#980043", "#7a0177", "#993404", "#bd0026")
-set.seed(1000)
+set.seed(100000)
 #pdf("figures/jama_title_monogram_wordcloud_positive.pdf", width = 8, height = 8)
 wordcloud(
           names(title.texts.all.significant.hits)[title.texts.all.significant.hits>0],
@@ -568,9 +635,9 @@ wordcloud(
 @
 
 <<bigram_wordcloud_positive, fig.width=8, fig.height=8>>=
-title.texts.bigram.all.significant.hits <- frequencyAnalysis$jama$title$all$bigram$sig.year.coefficients
+title.texts.bigram.all.significant.hits <- frequencyAnalysis$jama$title$all$bigram$sig.lm.coefficients
 #title.texts.bigram.words.to.exclude <- c("jama patient", "patient page", "of my", "piece of", "my mind", "mind the", "a piece", "the cover", "council on", "on scientific", "scientific affairs")
-title.texts.bigram.all.significant.hits <- title.texts.bigram.all.significant.hits[!(names(title.texts.bigram.all.significant.hits) %in% title.texts.bigram.words.to.exclude)]
+#title.texts.bigram.all.significant.hits <- title.texts.bigram.all.significant.hits[!(names(title.texts.bigram.all.significant.hits) %in% title.texts.bigram.words.to.exclude)]
 #pdf("figures/jama_title_bigram_wordcloud_positive.pdf", width = 8, height = 8)
 wordcloud(
           names(title.texts.bigram.all.significant.hits)[title.texts.bigram.all.significant.hits>0],
@@ -600,10 +667,10 @@ wordcloud(
 @
 
 <<>>=
-get.barplot <- function(tdm.freq.per.1000, termInTitle, direction=c("positive", "negative")) {
+get.barplot <- function(tdm.freq.per.100000, termInTitle, direction=c("positive", "negative"), ylab="Frequency per 100000 words") {
   direction=match.arg(direction)
   barplot.df.to.plot <- data.frame(
-                                freq.per.1000 = tdm.freq.per.1000[,termInTitle],
+                                freq.per.100000 = tdm.freq.per.100000[,termInTitle],
                                 year = 1976:2015
                                 )
   if(direction=="positive") {
@@ -612,12 +679,12 @@ get.barplot <- function(tdm.freq.per.1000, termInTitle, direction=c("positive", 
     plot.colour = "#b30000"
   }
   
-  ggplot(barplot.df.to.plot, aes(x = year, y = freq.per.1000)) +  
+  ggplot(barplot.df.to.plot, aes(x = year, y = freq.per.100000)) +  
     geom_bar(stat="identity", fill=plot.colour) +
   #  geom_errorbar(aes(ymin=lower, ymax=upper)) +
     ggtitle(paste0('"', termInTitle, '"')) + # plot title
     xlab("Year") + 
-    ylab("Frequency per 1000 words") +
+    ylab(ylab) +
     theme_bw() +
     theme(panel.grid.major = element_blank())
 }
@@ -626,41 +693,35 @@ get.barplot <- function(tdm.freq.per.1000, termInTitle, direction=c("positive", 
 <<barplots_epidemiological_terms, fig.width=8, fig.height=8>>=
 # Epidemiological terms
 grid.arrange(
-  get.barplot(frequencyAnalysis$jama$title$all$monogram$TDMHiFreq.per.1000, "randomized"),
-  get.barplot(frequencyAnalysis$jama$title$all$monogram$TDMHiFreq.per.1000, "trial"),
-  get.barplot(frequencyAnalysis$jama$title$all$monogram$TDMHiFreq.per.1000, "risk"),
-  get.barplot(frequencyAnalysis$jama$title$all$monogram$TDMHiFreq.per.1000, "outcomes"),
+  get.barplot(frequencyAnalysis$jama$title$all$monogram$term.freq.per.100000, "randomized"),
+  get.barplot(frequencyAnalysis$jama$title$all$monogram$term.freq.per.100000, "trial"),
+  get.barplot(frequencyAnalysis$jama$title$all$monogram$term.freq.per.100000, "risk"),
+  get.barplot(frequencyAnalysis$jama$title$all$monogram$term.freq.per.100000, "outcomes"),
   ncol=2)
 @
 
-<<barplots_patients_with, fig.width=8, fig.height=4>>=
+<<barplots_patient_vs_patients, fig.width=8, fig.height=8>>=
 grid.arrange(
-  get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "patient with", direction="negative"),
-  get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "patients with"),
-  ncol=2)
-@
-
-<<barplots_a_in_patients, fig.width=8, fig.height=4>>=
-grid.arrange(
-  get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "a patient", direction = "negative"),
-  get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "in patients"),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "a patient", direction = "negative"),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "in patients"),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "patient with", direction="negative"),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "patients with"),
   ncol=2)
 @
 
 <<barplots_elderly, fig.width=8, fig.height=8>>=
 grid.arrange(
-  get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "the elderly", direction="negative"),
-  get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "older patients"),
-  get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "older adults"),
-  ncol=2
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "the elderly", direction="negative"),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "older patients"),
+  ggplot() + theme_classic(),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "older adults")
   )
-}
 @
 
 <<barplots_diabetes, fig.width=8, fig.height=4>>=
 grid.arrange(
-  get.barplot(frequencyAnalysis$jama$title$all$monogram$TDMHiFreq.per.1000, "diabetes"),
-  get.barplot(frequencyAnalysis$jama$title$all$monogram$TDMHiFreq.per.1000, "diabetic", direction = "negative"),
+  get.barplot(frequencyAnalysis$jama$title$all$monogram$term.freq.per.100000, "diabetes"),
+  get.barplot(frequencyAnalysis$jama$title$all$monogram$term.freq.per.100000, "diabetic", direction = "negative"),
   ncol=2)
 @
 
@@ -681,27 +742,217 @@ writeLines(head(unique(article.titles.with.diabetes), 20))
 writeLines(tail(unique(article.titles.with.diabetes), 22))
 @
 
+<<barplots_causation, fig.width=8, fig.height=4>>=
+grid.arrange(
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "caused by", direction = "negative"),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "cause of", direction = "negative"),
+  ncol=2)
+@
+
+<<barplots_kidney, fig.width=8, fig.height=4>>=
+grid.arrange(
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "kidney disease"),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "renal failure", direction = "negative"),
+  ncol=2)
+@
+
+<<barplots_mental_health, fig.width=8, fig.height=4>>=
+grid.arrange(
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "mental health"),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "posttraumatic stress"),
+  ncol=2)
+@
+
+<<jama-barplots>>=
+barplot(sort(frequencyAnalysis$jama$title$all$monogram$lm.coefficients), horiz=TRUE, las=2, yaxt='n', xlab = "Annual change in frequency per 100000 terms")
+
+
+get.top.terms.barplot <- function(stat.list, increase.n=25, decrease.n=25) {
+  top.words <- c(head(sort(stat.list$sig.lm.coefficients), n=increase.n), tail(sort(stat.list$sig.lm.coefficients), n=decrease.n))
+  top.words.df <- data.frame(term=names(top.words), coef=top.words)
+  top.words.df$term <- factor(top.words.df$term, levels=unique(top.words.df$term))
+  top.words.df$colour <- c(rep('gray', increase.n), rep('#E69F00', decrease.n))
+  top.words.df$ci.95.lower <- sapply(stat.list$lm.95.percent.confints[as.character(top.words.df$term)], `[[`, 1)
+  top.words.df$ci.95.upper <- sapply(stat.list$lm.95.percent.confints[as.character(top.words.df$term)], `[[`, 2)
+  
+  ggplot(top.words.df, aes(x=term, y=coef, fill=term)) +
+      theme_classic() +
+      geom_errorbar(aes(ymin=ci.95.lower, ymax=ci.95.upper), width=0.5, col="darkgray") +
+      geom_bar(stat='identity') +
+      coord_flip() +
+      xlab("") + 
+      ylab("Annual change in frequency per 100000 terms") +
+      scale_fill_manual(values=top.words.df$colour) +
+      theme(legend.position="none") 
+}
+
+#barplot(c(head(sort(frequencyAnalysis$jama$title$all$monogram$sig.lm.coefficients), n=20), "."=0, "."=0, "."=0, tail(sort(frequencyAnalysis$jama$title$all$monogram$sig.lm.coefficients), n=20)), las=2, horiz=TRUE, cex.names =0.7, col=c(rep('gray', 20), rep("black", 3), rep('#E69F00', 20)))
+@
+
+\pagebreak
+JAMA:
+<<top-monogram-barplot-jama>>=
+get.top.terms.barplot(frequencyAnalysis$jama$title$all$monogram)
+@
+<<top-bigram-barplot-jama>>=
+get.top.terms.barplot(frequencyAnalysis$jama$title$all$bigram)
+@
+
+
+<<mega-plot-jama, fig.width=8, fig.height=10>>=
+grid.arrange(
+  get.barplot(frequencyAnalysis$jama$title$all$monogram$term.freq.per.100000, "randomized"),
+  get.barplot(frequencyAnalysis$jama$title$all$monogram$term.freq.per.100000, "trial", ylab=""),
+  get.barplot(frequencyAnalysis$jama$title$all$monogram$term.freq.per.100000, "risk", ylab=""),
+  get.barplot(frequencyAnalysis$jama$title$all$monogram$term.freq.per.100000, "outcomes", ylab=""),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "a patient", direction = "negative"),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "patient with", direction="negative", ylab=""),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "in patients", ylab=""),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "patients with", ylab=""),
+  ggplot() + theme_classic(),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "the elderly", direction="negative", ylab=""),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "older patients", ylab=""),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "older adults", ylab=""),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "caused by", direction = "negative"),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "cause of", direction = "negative", ylab=""),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "mental health", ylab=""),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "posttraumatic stress", ylab=""),
+  ggplot() + theme_classic(),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "renal failure", direction = "negative", ylab=""),
+  get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "kidney disease", ylab=""),
+  ggplot() + theme_classic(),
+  ncol=4
+)
+@
+
+\pagebreak
+Lancet:
+<<top-monogram-barplot-lancet>>=
+get.top.terms.barplot(frequencyAnalysis$lancet$title$all$monogram)
+@
+<<top-bigram-barplot-lancet>>=
+get.top.terms.barplot(frequencyAnalysis$lancet$title$all$bigram)
+@
+<<mega-plot-lancet, fig.width=8, fig.height=10>>=
+grid.arrange(
+  get.barplot(frequencyAnalysis$lancet$title$all$monogram$term.freq.per.100000, "randomized"),
+  get.barplot(frequencyAnalysis$lancet$title$all$monogram$term.freq.per.100000, "trial", ylab=""),
+  get.barplot(frequencyAnalysis$lancet$title$all$monogram$term.freq.per.100000, "risk", ylab=""),
+  get.barplot(frequencyAnalysis$lancet$title$all$monogram$term.freq.per.100000, "outcomes", ylab=""),
+  get.barplot(frequencyAnalysis$lancet$title$all$bigram$term.freq.per.100000, "a patient", direction = "negative"),
+  get.barplot(frequencyAnalysis$lancet$title$all$bigram$term.freq.per.100000, "patient with", direction="negative", ylab=""),
+  get.barplot(frequencyAnalysis$lancet$title$all$bigram$term.freq.per.100000, "in patients", ylab=""),
+  get.barplot(frequencyAnalysis$lancet$title$all$bigram$term.freq.per.100000, "patients with", ylab=""),
+  ggplot() + theme_classic(),
+  get.barplot(frequencyAnalysis$lancet$title$all$bigram$term.freq.per.100000, "the elderly", direction="negative", ylab=""),
+  get.barplot(frequencyAnalysis$lancet$title$all$bigram$term.freq.per.100000, "older patients", ylab=""),
+  get.barplot(frequencyAnalysis$lancet$title$all$bigram$term.freq.per.100000, "older adults", ylab=""),
+  get.barplot(frequencyAnalysis$lancet$title$all$bigram$term.freq.per.100000, "caused by", direction = "negative"),
+  get.barplot(frequencyAnalysis$lancet$title$all$bigram$term.freq.per.100000, "cause of", direction = "negative", ylab=""),
+  get.barplot(frequencyAnalysis$lancet$title$all$bigram$term.freq.per.100000, "mental health", ylab=""),
+  get.barplot(frequencyAnalysis$lancet$title$all$bigram$term.freq.per.100000, "posttraumatic stress", ylab=""),
+  ggplot() + theme_classic(),
+  get.barplot(frequencyAnalysis$lancet$title$all$bigram$term.freq.per.100000, "renal failure", direction = "negative", ylab=""),
+  get.barplot(frequencyAnalysis$lancet$title$all$bigram$term.freq.per.100000, "kidney disease", ylab=""),
+  ggplot() + theme_classic(),
+  ncol=4
+)
+@
+
+\pagebreak
+Annals of Internal Medicine:
+<<mega-plot-annals, fig.width=8, fig.height=10>>=
+grid.arrange(
+  get.barplot(frequencyAnalysis$annals$title$all$monogram$term.freq.per.100000, "randomized"),
+  get.barplot(frequencyAnalysis$annals$title$all$monogram$term.freq.per.100000, "trial", ylab=""),
+  get.barplot(frequencyAnalysis$annals$title$all$monogram$term.freq.per.100000, "risk", ylab=""),
+  get.barplot(frequencyAnalysis$annals$title$all$monogram$term.freq.per.100000, "outcomes", ylab=""),
+  get.barplot(frequencyAnalysis$annals$title$all$bigram$term.freq.per.100000, "a patient", direction = "negative"),
+  get.barplot(frequencyAnalysis$annals$title$all$bigram$term.freq.per.100000, "patient with", direction="negative", ylab=""),
+  get.barplot(frequencyAnalysis$annals$title$all$bigram$term.freq.per.100000, "in patients", ylab=""),
+  get.barplot(frequencyAnalysis$annals$title$all$bigram$term.freq.per.100000, "patients with", ylab=""),
+  ggplot() + theme_classic(),
+  get.barplot(frequencyAnalysis$annals$title$all$bigram$term.freq.per.100000, "the elderly", direction="negative", ylab=""),
+  get.barplot(frequencyAnalysis$annals$title$all$bigram$term.freq.per.100000, "older patients", ylab=""),
+  get.barplot(frequencyAnalysis$annals$title$all$bigram$term.freq.per.100000, "older adults", ylab=""),
+  get.barplot(frequencyAnalysis$annals$title$all$bigram$term.freq.per.100000, "caused by", direction = "negative"),
+  get.barplot(frequencyAnalysis$annals$title$all$bigram$term.freq.per.100000, "cause of", direction = "negative", ylab=""),
+  get.barplot(frequencyAnalysis$annals$title$all$bigram$term.freq.per.100000, "mental health", ylab=""),
+  get.barplot(frequencyAnalysis$annals$title$all$bigram$term.freq.per.100000, "posttraumatic stress", ylab=""),
+  ggplot() + theme_classic(),
+  get.barplot(frequencyAnalysis$annals$title$all$bigram$term.freq.per.100000, "renal failure", direction = "negative", ylab=""),
+  get.barplot(frequencyAnalysis$annals$title$all$bigram$term.freq.per.100000, "kidney disease", ylab=""),
+  ggplot() + theme_classic(),
+  ncol=4
+)
+@
+
+\pagebreak
+BMJ:
+<<mega-plot-bmj, fig.width=8, fig.height=10>>=
+grid.arrange(
+  get.barplot(frequencyAnalysis$bmj$title$all$monogram$term.freq.per.100000, "randomized"),
+  get.barplot(frequencyAnalysis$bmj$title$all$monogram$term.freq.per.100000, "trial", ylab=""),
+  get.barplot(frequencyAnalysis$bmj$title$all$monogram$term.freq.per.100000, "risk", ylab=""),
+  get.barplot(frequencyAnalysis$bmj$title$all$monogram$term.freq.per.100000, "outcomes", ylab=""),
+  get.barplot(frequencyAnalysis$bmj$title$all$bigram$term.freq.per.100000, "a patient", direction = "negative"),
+  get.barplot(frequencyAnalysis$bmj$title$all$bigram$term.freq.per.100000, "patient with", direction="negative", ylab=""),
+  get.barplot(frequencyAnalysis$bmj$title$all$bigram$term.freq.per.100000, "in patients", ylab=""),
+  get.barplot(frequencyAnalysis$bmj$title$all$bigram$term.freq.per.100000, "patients with", ylab=""),
+  ggplot() + theme_classic(),
+  get.barplot(frequencyAnalysis$bmj$title$all$bigram$term.freq.per.100000, "the elderly", direction="negative", ylab=""),
+  get.barplot(frequencyAnalysis$bmj$title$all$bigram$term.freq.per.100000, "older patients", ylab=""),
+  get.barplot(frequencyAnalysis$bmj$title$all$bigram$term.freq.per.100000, "older adults", ylab=""),
+  get.barplot(frequencyAnalysis$bmj$title$all$bigram$term.freq.per.100000, "caused by", direction = "negative"),
+  get.barplot(frequencyAnalysis$bmj$title$all$bigram$term.freq.per.100000, "cause of", direction = "negative", ylab=""),
+  get.barplot(frequencyAnalysis$bmj$title$all$bigram$term.freq.per.100000, "mental health", ylab=""),
+  get.barplot(frequencyAnalysis$bmj$title$all$bigram$term.freq.per.100000, "posttraumatic stress", ylab=""),
+  ggplot() + theme_classic(),
+  get.barplot(frequencyAnalysis$bmj$title$all$bigram$term.freq.per.100000, "renal failure", direction = "negative", ylab=""),
+  get.barplot(frequencyAnalysis$bmj$title$all$bigram$term.freq.per.100000, "kidney disease", ylab=""),
+  ggplot() + theme_classic(),
+  ncol=4
+)
+@
+
+\pagebreak
+NEJM:
+<<mega-plot-nejm, fig.width=8, fig.height=10>>=
+grid.arrange(
+  get.barplot(frequencyAnalysis$nejm$title$all$monogram$term.freq.per.100000, "randomized"),
+  get.barplot(frequencyAnalysis$nejm$title$all$monogram$term.freq.per.100000, "trial", ylab=""),
+  get.barplot(frequencyAnalysis$nejm$title$all$monogram$term.freq.per.100000, "risk", ylab=""),
+  get.barplot(frequencyAnalysis$nejm$title$all$monogram$term.freq.per.100000, "outcomes", ylab=""),
+  get.barplot(frequencyAnalysis$nejm$title$all$bigram$term.freq.per.100000, "a patient", direction = "negative"),
+  get.barplot(frequencyAnalysis$nejm$title$all$bigram$term.freq.per.100000, "patient with", direction="negative", ylab=""),
+  get.barplot(frequencyAnalysis$nejm$title$all$bigram$term.freq.per.100000, "in patients", ylab=""),
+  get.barplot(frequencyAnalysis$nejm$title$all$bigram$term.freq.per.100000, "patients with", ylab=""),
+  ggplot() + theme_classic(),
+  get.barplot(frequencyAnalysis$nejm$title$all$bigram$term.freq.per.100000, "the elderly", direction="negative", ylab=""),
+  get.barplot(frequencyAnalysis$nejm$title$all$bigram$term.freq.per.100000, "older patients", ylab=""),
+  get.barplot(frequencyAnalysis$nejm$title$all$bigram$term.freq.per.100000, "older adults", ylab=""),
+  get.barplot(frequencyAnalysis$nejm$title$all$bigram$term.freq.per.100000, "caused by", direction = "negative"),
+  get.barplot(frequencyAnalysis$nejm$title$all$bigram$term.freq.per.100000, "cause of", direction = "negative", ylab=""),
+  get.barplot(frequencyAnalysis$nejm$title$all$bigram$term.freq.per.100000, "mental health", ylab=""),
+  get.barplot(frequencyAnalysis$nejm$title$all$bigram$term.freq.per.100000, "posttraumatic stress", ylab=""),
+  ggplot() + theme_classic(),
+  get.barplot(frequencyAnalysis$nejm$title$all$bigram$term.freq.per.100000, "renal failure", direction = "negative", ylab=""),
+  get.barplot(frequencyAnalysis$nejm$title$all$bigram$term.freq.per.100000, "kidney disease", ylab=""),
+  ggplot() + theme_classic(),
+  ncol=4
+)
+@
+
 <<>>=
 # caused by, cause of
-get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "caused by", direction = "negative")
 
-get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "cause of", direction = "negative")
-
-get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "kidney disease")
-
-get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "renal failure", direction = "negative")
-
-get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "mental health")
-
-get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "posttraumatic stress")
-
-#current.conf.ints <- lapply(1:nrow(myTDMHiFreq.per.1000), function(x) {
+#current.conf.ints <- lapply(1:nrow(myterm.freq.per.100000), function(x) {
 #  prop.test.out <- prop.test(myTDMCounts[x,"diabetes"], year.term.count.sums[x])
-#  prop.test.conf.ints <- as.vector(prop.test.out$conf.int * 1000)
+#  prop.test.conf.ints <- as.vector(prop.test.out$conf.int * 100000)
 #  names(prop.test.conf.ints) <- c("lower", "upper")
 #  return(prop.test.conf.ints)
 #  })
-#current.standard.errors <- sapply(1:nrow(myTDMHiFreq.per.1000), function(x) {
+#current.standard.errors <- sapply(1:nrow(myterm.freq.per.100000), function(x) {
 #  k <- myTDMCounts[x,"diabetic"]
 #  n <- year.term.count.sums[x]
 #  pbar <- k / n
@@ -709,22 +960,22 @@ get.barplot(frequencyAnalysis$jama$title$all$bigram$TDMHiFreq.per.1000, "posttra
 #  return(SE)
 #})
 #barplot.df.to.plot <- as.data.frame(do.call(rbind, current.conf.ints))
-#barplot.df.to.plot$freq.per.1000 <- current.freq.per.1000
+#barplot.df.to.plot$freq.per.100000 <- current.freq.per.100000
 #barplot.df.to.plot$year <- 1976:2015
-#barplot.df.to.plot$se <- current.standard.errors * 1000
+#barplot.df.to.plot$se <- current.standard.errors * 100000
 
-#ggplot(barplot.df.to.plot, aes(x = year, y = freq.per.1000)) +  
+#ggplot(barplot.df.to.plot, aes(x = year, y = freq.per.100000)) +  
 #  geom_point(stat="identity", fill="blue") + 
-#  geom_errorbar(aes(ymin=freq.per.1000-se, ymax=freq.per.1000+se)) +
+#  geom_errorbar(aes(ymin=freq.per.100000-se, ymax=freq.per.100000+se)) +
 #  ggtitle("Bar plot with 95% confidence intervals") + # plot title
 #  theme_bw() + # remove grey background (because Tufte said so)
 #  theme(panel.grid.major = element_blank())
 
 # do this barplot in chunks of five years
-barplot(tapply(myTDMHiFreq.per.1000[,"from"], (seq_along(myTDMHiFreq.per.1000[,"from"])-1) %/% 5, sum))
+#barplot(tapply(myterm.freq.per.100000[,"from"], (seq_along(myterm.freq.per.100000[,"from"])-1) %/% 5, sum))
 
 # find all words after "among"
-out <- sapply(title.texts, function(x) unlist(str_extract_all(x$content, '(?<=among\\s)\\w+')))
+#out <- sapply(title.texts, function(x) unlist(str_extract_all(x$content, '(?<=among\\s)\\w+')))
 # Can do some analyses on just these words, can do fancy things like take up to the first noun after "among"
 
 
