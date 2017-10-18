@@ -10,7 +10,7 @@ do
 	for MONTH in {1..12}
 	do
 		echo "Year $YEAR Month $MONTH"
-		esearch -db pubmed -query "(\"BMJ\" [journal] OR \"Br Med J\" [journal] )AND $YEAR/$MONTH [dp]" | \
+		esearch -db pubmed -query "(\"BMJ\" [journal] OR \"Br Med J\" [journal] OR \"Br Med J (Clin Res Ed)\" [journal] ) AND $YEAR/$MONTH [dp]" | \
 		efetch -format xml | \
 		tee >(xtract -pattern Article -element ArticleTitle > "$OUTDIR/${YEAR}_${MONTH}_TitleText.txt") | \
 		tee >(xtract -pattern MeshHeading -element DescriptorName > "$OUTDIR/${YEAR}_${MONTH}_KeywordText.txt") | \
