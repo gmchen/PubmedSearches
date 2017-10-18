@@ -54,8 +54,7 @@ if(file.exists("jamaTexts.RData") &&
   for(year in 1976:2015) {
     yearIndex <- year - 1975
     for(month in 1:12) {
-      #for(journalName in c("bmj")) {
-      for(journalName in c("jama", "annals", "nejm", "lancet", "bmj")) {
+      for(journalName in c("jama", "nejm", "annals", "lancet", "bmj")) {
         print(paste("Parsing year", year, "and month", month))
         if(journalName == "jama") {
           current.xml.text <- read_file(paste0("../Pubmed_JAMA/xml/", year, "_", month, ".xml"))
@@ -221,23 +220,31 @@ clinical.trial.pubtypes <- c("Clinical Trial",
                              "Clinical Trial, Phase II",                              
                              "Clinical Trial, Phase III",                               
                              "Clinical Trial, Phase IV",
-                             "Twin Study",
                              "Randomized Controlled Trial",
                              "Pragmatic Clinical Trial",
-                             "Observational Study",
-                             "Multicenter Study",
-                             "Meta-Analysis",
-                             "Evaluation Studies",
                              "Controlled Clinical Trial")
 
-clinical.trial.exclusion.pubtypes <- c("Editorial",
-                                       "News",
-                                       "Historical Article",
-                                       "Case Reports",
-                                       "Review",
-                                       "Congresses",
-                                       "Guideline",
-                                       "Practice Guideline")
+clinical.trial.exclusion.pubtypes <- c(
+                                      "Biography",
+                                      "Case Reports",
+                                      "Classical Article",
+                                      "Clinical Conference",
+                                      "Comment",
+                                      "Congresses",
+                                      "Consensus Development Conference",
+                                      "Duplicate Publication",
+                                      "Editorial",
+                                      "Guideline",
+                                      "Historical Article",
+                                      "Legal Cases",
+                                      "Letter",
+                                      "News",
+                                      "Patient Education Handout",
+                                      "Portraits",
+                                      "Retracted Publication",
+                                      "Review"
+                                      )
+
 apply.clinical.trial.filters <- function(pubtypes.list) {
   any(clinical.trial.pubtypes %in% pubtypes.list) & !any(clinical.trial.exclusion.pubtypes %in% pubtypes.list)
 }
@@ -278,7 +285,8 @@ for(journalName in names(all.texts)) {
   publication.type.plot <- ggplot(pubtype.fig.df.m, aes(x = year, y = Frequency, colour=factor(PublicationType))) +  
     geom_point(stat="identity") + 
     scale_colour_manual(values=c("#045a8d", "#bd0026"), name="Publication Type", labels=c("Clinical Trial", "Case Report")) +
-    geom_smooth(aes(colour=factor(PublicationType)), method = lm, show.legend = FALSE) + 
+    #geom_smooth(aes(colour=factor(PublicationType)), method = lm, show.legend = FALSE) + 
+    geom_smooth(aes(colour=factor(PublicationType)), method = loess, method.args = list(family = "symmetric"), show.legend = FALSE) +
     ggtitle(paste0("Clinical Trials vs Case Reports in ", journalNameTitle)) + # plot title
     xlab("Year") + 
     ylab("Frequency") +
@@ -292,7 +300,12 @@ for(journalName in names(all.texts)) {
 }
 @
 
-<<jama_publication_types>>=
+<<jama_publication_types, fig.width=6, fig.height=5>>=
+#plot(1976:2015, sapply(1976:2015, function(year) sum(all.texts$jama$year == year)), ylim=c(0, 1600))
+#plot(1976:2015, sapply(1976:2015, function(year) sum(all.texts$nejm$year == year)), ylim=c(0, 1800))
+#plot(1976:2015, sapply(1976:2015, function(year) sum(all.texts$annals$year == year)), ylim=c(0, 850))
+#plot(1976:2015, sapply(1976:2015, function(year) sum(all.texts$lancet$year == year)), ylim=c(0,3000))
+#plot(1976:2015, sapply(1976:2015, function(year) sum(all.texts$bmj$year == year)), ylim=c(0, 3600))
 publication.type.plots$jama
 @
 
@@ -353,12 +366,9 @@ clinical.trials.merged.df <- do.call(rbind, lapply(names(all.texts), function(jo
   
   is.clinical.trial <- sapply(texts$publication.types, apply.clinical.trial.filters)
   
-  year.range <- c(1976:1980, 2011:2015)
-  to.include <- texts$year %in% year.range & is.clinical.trial
-  
   current.data.frame <- data.frame(
-    title=texts$title[to.include],
-    year=texts$year[to.include],
+    title=texts$title[is.clinical.trial],
+    year=texts$year[is.clinical.trial],
     journal=journalName,
     stringsAsFactors = FALSE)
   return(current.data.frame)
@@ -398,38 +408,71 @@ clinical.trials.merged.df$patient.keyword.hit <- sapply(clinical.trials.merged.d
 
 clinical.trials.merged.df$title.length <- sapply(clinical.trials.merged.df$title, nchar)
 
-patient.keyword.df.for.barplot <- data.frame(proportion=numeric(), timeframe=factor(levels=c("1976-1980", "2011-2015")), title.length=numeric(), journal=character())
+clinical.trials.merged.df$time.period <- "middle"
+clinical.trials.merged.df$time.period[clinical.trials.merged.df$year %in% 1976:1980] <- "early"
+clinical.trials.merged.df$time.period[clinical.trials.merged.df$year %in% 2011:2015] <- "late"
+clinical.trials.merged.df$time.period[clinical.trials.merged.df$year %in% 1976:1985] <- "early"
+clinical.trials.merged.df$time.period[clinical.trials.merged.df$year %in% 2006:2015] <- "late"
+
+patient.keyword.df.for.barplot <- data.frame(proportion=numeric(), timeframe=factor(levels=c("early", "late")), title.length=numeric(), journal=character())
 
 for(journalName in names(all.texts)) {
-  num.patient.keyword.hits.early <- mean(
+  mean.patient.keyword.hits.early <- mean(
     clinical.trials.merged.df$patient.keyword.hit[
-                  clinical.trials.merged.df$year %in% 1976:1980 &
+                  clinical.trials.merged.df$time.period == "early" &
                   clinical.trials.merged.df$journal == journalName
                   ] == TRUE
     )
-  num.patient.keyword.hits.late <- mean(
+  num.patient.keyword.hits.early <- sum(
     clinical.trials.merged.df$patient.keyword.hit[
-                  clinical.trials.merged.df$year %in% 2011:2015 &
+                  clinical.trials.merged.df$time.period == "early" &
                   clinical.trials.merged.df$journal == journalName
                   ] == TRUE
+    )
+  num.patient.keyword.nonhits.early <- sum(
+    clinical.trials.merged.df$patient.keyword.hit[
+                  clinical.trials.merged.df$time.period == "early" &
+                  clinical.trials.merged.df$journal == journalName
+                  ] == FALSE
+    )
+  
+  mean.patient.keyword.hits.late <- mean(
+    clinical.trials.merged.df$patient.keyword.hit[
+                  clinical.trials.merged.df$time.period == "late" &
+                  clinical.trials.merged.df$journal == journalName
+                  ] == TRUE
+    )
+  num.patient.keyword.hits.late <- sum(
+    clinical.trials.merged.df$patient.keyword.hit[
+                  clinical.trials.merged.df$time.period == "late" &
+                  clinical.trials.merged.df$journal == journalName
+                  ] == TRUE
+    )
+  num.patient.keyword.nonhits.late <- sum(
+    clinical.trials.merged.df$patient.keyword.hit[
+                  clinical.trials.merged.df$time.period == "late" &
+                  clinical.trials.merged.df$journal == journalName
+                  ] == FALSE
     )
   
   mean.title.length.early <- mean(
     clinical.trials.merged.df$title.length[
-                  clinical.trials.merged.df$year %in% 1976:1980 &
+                  clinical.trials.merged.df$time.period == "early" &
                   clinical.trials.merged.df$journal == journalName
                   ]
     )
   
   mean.title.length.late <- mean(
     clinical.trials.merged.df$title.length[
-                  clinical.trials.merged.df$year %in% 2011:2015 &
+                  clinical.trials.merged.df$time.period == "late" &
                   clinical.trials.merged.df$journal == journalName
                   ]
     )
   df.to.add <- data.frame(
-    proportion=c(num.patient.keyword.hits.early, num.patient.keyword.hits.late),
-    timeframe=c("1976-1980", "2011-2015"),
+    proportion=c(mean.patient.keyword.hits.early, mean.patient.keyword.hits.late),
+    n.hits=c(num.patient.keyword.hits.early, num.patient.keyword.hits.late),
+    n.nonhits=c(num.patient.keyword.nonhits.early, num.patient.keyword.nonhits.late),
+    timeframe=c("early", "late"),
     title.length=c(mean.title.length.early, mean.title.length.late),
     journal=journalName)
   patient.keyword.df.for.barplot <- rbind(patient.keyword.df.for.barplot, df.to.add)
@@ -440,13 +483,24 @@ patient.keyword.df.for.barplot$journal <- factor(
                                             patient.keyword.df.for.barplot$journal,
                                             levels=c("jama", "lancet", "annals", "bmj", "nejm"))
 
+patient.keyword.df.for.barplot$lcb.95 <- NA
+patient.keyword.df.for.barplot$ucb.95 <- NA
+
+sapply(1:nrow(patient.keyword.df.for.barplot), function(rowi) {
+  prop.test.out <- prop.test(patient.keyword.df.for.barplot$n.hits[rowi], patient.keyword.df.for.barplot$n.hits[rowi] + patient.keyword.df.for.barplot$n.nonhits[rowi])
+  patient.keyword.df.for.barplot$lcb.95[rowi] <<- prop.test.out$conf.int[1]
+  patient.keyword.df.for.barplot$ucb.95[rowi] <<- prop.test.out$conf.int[2]
+})
+
+prop.test(as.matrix(patient.keyword.df.for.barplot[patient.keyword.df.for.barplot$journal == "jama",c("n.hits", "n.nonhits")]))
 @
 
 <<patient-centric_keywords_by_journal, fig.width=5, fig.height=5, out.width="0.6\\textwidth">>=
 ggplot(data=patient.keyword.df.for.barplot, aes(x=journal, y=proportion, fill=timeframe)) +
-      geom_bar(stat='identity', position=position_dodge()) + 
+  geom_errorbar(aes(ymin=lcb.95, ymax=ucb.95), width=0.5, position=position_dodge(0.9), col="darkgray") +
+  geom_bar(stat='identity', position=position_dodge()) + 
   #ggtitle("Proportion of clinical trial titles with patient-centric keywords") + 
-  scale_fill_manual(name="Time Period", values=c('gray','#E69F00')) + 
+  scale_fill_manual(name="Time Period", values=c('gray','#E69F00'), labels=c("1976-1980", "2011-2015")) + 
   theme_classic() + 
   theme(plot.title = element_text(hjust=0.5, face="bold"), axis.text.y = element_text(size=10)) + 
   scale_x_discrete(labels=c("JAMA", "Lancet", "Ann Intern\nMed.", "BMJ", "N Engl J\nMed.")) +
@@ -512,7 +566,6 @@ if(file.exists("corpusTexts.RData") && file.exists("frequencyAnalysis.RData")) {
     #names(corpusTexts[[journalName]]) <- c("title", "abstract")
     names(corpusTexts[[journalName]]) <- c("title")
   }
-  save(corpusTexts, file="corpusTexts.RData")
   
   frequencyAnalysis <- lapply(corpusTexts, function(corpusTextByJournal) {
     lapply(corpusTextByJournal, function(corpusTextByTextType) {
@@ -536,7 +589,7 @@ if(file.exists("corpusTexts.RData") && file.exists("frequencyAnalysis.RData")) {
             
             term.freq.per.100000 <- myTDMCounts * 100000 / matrix.rowsums
             
-            # only include terms that have occurred at least 1/1000000 (0.01%) of the time
+            # only include terms that have occurred at least 1/10000 (0.01%) of the time
             myTDMHiFreq.per.100000 <- term.freq.per.100000[,freq.count.table$count > 0.0001 * sum(freq.count.table$count)]
            
             # For monogram analysis, remove stopwords. Note that this happens after frequencies are calculated.
@@ -639,8 +692,8 @@ title.texts.all.significant.hits <- frequencyAnalysis$jama$title$all$monogram$si
 # Wordcloud for positive hits
 cool.colours <- c("#006d2c", "#0868ac", "#045a8d", "#016c59", "#253494")
 warm.colours <- c("#b30000", "#980043", "#7a0177", "#993404", "#bd0026")
-set.seed(100000)
-#pdf("figures/jama_title_monogram_wordcloud_positive.pdf", width = 8, height = 8)
+set.seed(1000) # 1000
+#pdf("jama_title_monogram_wordcloud_positive.pdf", width = 8, height = 8)
 wordcloud(
           names(title.texts.all.significant.hits)[title.texts.all.significant.hits>0],
           freq=title.texts.all.significant.hits[title.texts.all.significant.hits>0], 
@@ -696,7 +749,7 @@ wordcloud(
 @
 
 <<>>=
-get.barplot <- function(tdm.freq.per.100000, termInTitle, direction=c("positive", "negative"), ylab="Frequency per 100000 words") {
+get.barplot <- function(tdm.freq.per.100000, termInTitle, direction=c("positive", "negative"), ylab="Frequency per 100,000 words") {
   direction=match.arg(direction)
   barplot.df.to.plot <- data.frame(
                                 freq.per.100000 = tdm.freq.per.100000[,termInTitle],
@@ -810,7 +863,7 @@ get.top.terms.barplot <- function(stat.list, increase.n=25, decrease.n=25) {
       geom_bar(stat='identity') +
       coord_flip() +
       xlab("") + 
-      ylab("Annual change in frequency per 100000 terms") +
+      ylab("Annual change in frequency per 100,000 terms") +
       scale_fill_manual(values=top.words.df$colour) +
       theme(legend.position="none") 
 }
@@ -827,6 +880,11 @@ get.top.terms.barplot(frequencyAnalysis$jama$title$all$monogram)
 get.top.terms.barplot(frequencyAnalysis$jama$title$all$bigram)
 @
 
+<<plot, eval=FALSE>>=
+p1 <- get.top.terms.barplot(frequencyAnalysis$jama$title$all$monogram) + ylab("Annual change in frequency\nper 100,000 terms") + theme(axis.title.x=element_text(size=9))
+p2 <- get.top.terms.barplot(frequencyAnalysis$jama$title$all$bigram)  + ylab("Annual change in frequency\nper 100,000 terms") + theme(axis.title.x=element_text(size=9))
+ggsave("jama_plots_together.pdf", width=6.5, height=5.7, arrangeGrob(p1, p2, layout_matrix = matrix(c(1,2), ncol=2)))
+@
 
 <<mega-plot-jama, fig.width=8, fig.height=10>>=
 grid.arrange(
