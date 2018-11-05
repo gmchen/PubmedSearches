@@ -197,6 +197,7 @@ annals.regexes.to.remove <- c(
   "^ACP Journal Club. review: ",
   "^ACP Journal Club",
   "^Summaries for Patients\\. ",
+  "^Summaries for patients\\. ",
   "^Correction: ",
   "^In the Clinic."
   )
@@ -325,6 +326,39 @@ publication.type.plots$lancet
 publication.type.plots$bmj
 @
 
+<<generate_randomized_file_for_blinded_review, eval=FALSE>>=
+journal.dfs <- lapply(names(all.texts), function(journalName) {
+  texts <- all.texts[[journalName]]
+  # Five-year intervals
+  
+  is.clinical.trial <- sapply(texts$publication.types, apply.clinical.trial.filters  )
+  in.year.range <- texts$year %in% c(1976:1980, 2011:2015)
+    
+  current.df <- data.frame(
+                title=texts$title[is.clinical.trial & in.year.range],
+                year=texts$year[is.clinical.trial & in.year.range],
+                journal=journalName
+                )
+  return(current.df)
+})
+
+names(journal.dfs) <- names(all.texts)
+
+all.journal.df <- do.call(rbind, journal.dfs)
+
+set.seed(100)
+# randomize
+all.journal.df <- all.journal.df[sample(1:nrow(all.journal.df)),]
+
+
+write.table(
+  all.journal.df,
+  file = paste0("Randomized-Nov12-alljournals.csv"),
+  col.names=FALSE,
+  row.names=FALSE,
+  sep=",")
+@
+
 <<save_files_for_manual_inspection, eval=FALSE>>=
 for(journalName in names(all.texts)) {
   texts <- all.texts[[journalName]]
@@ -357,6 +391,121 @@ for(journalName in names(all.texts)) {
     
   }
 }
+@
+
+Two independent raters, blinded to journal name and publication year assessed the use of patient-centric language in the titles of manuscripts reporting clinical trials published in JAMA and four other journals.
+
+<<manual_annotation_generate_patient-centric_keywords_by_journal>>=
+consensus.review.df <- read.csv("~/Google Drive/Doctoring 1A Capstone/Nov15-meeting/Post_Consensus_manual_review_Nov15.csv", fileEncoding="latin1")
+
+rownames(consensus.review.df) <- consensus.review.df$X
+consensus.review.df$X <- NULL
+
+consensus.review.df.for.barplot <- data.frame(proportion=numeric(), n.hits=numeric(), n.nonhits=numeric(), timeframe=factor(levels=c("early", "late")), title.length=numeric(), journal=character(), lcb.95=numeric(), ucb.95=numeric())
+
+for(journalName in levels(consensus.review.df$journal)) {
+  mean.consensus.review.hits.early <- mean(
+    consensus.review.df$consensus.category[
+                  consensus.review.df$time.period == "early" &
+                  consensus.review.df$journal == journalName
+                  ] == "Patient-centric"
+    )
+  num.consensus.review.hits.early <- sum(
+    consensus.review.df$consensus.category[
+                  consensus.review.df$time.period == "early" &
+                  consensus.review.df$journal == journalName
+                  ] == "Patient-centric"
+    )
+  num.consensus.review.nonhits.early <- sum(
+    consensus.review.df$consensus.category[
+                  consensus.review.df$time.period == "early" &
+                  consensus.review.df$journal == journalName
+                  ] == "Non-Patient-Centric"
+    )
+  
+  mean.consensus.review.hits.late <- mean(
+    consensus.review.df$consensus.category[
+                  consensus.review.df$time.period == "late" &
+                  consensus.review.df$journal == journalName
+                  ] == "Patient-centric"
+    )
+  num.consensus.review.hits.late <- sum(
+    consensus.review.df$consensus.category[
+                  consensus.review.df$time.period == "late" &
+                  consensus.review.df$journal == journalName
+                  ] == "Patient-centric"
+    )
+  num.consensus.review.nonhits.late <- sum(
+    consensus.review.df$consensus.category[
+                  consensus.review.df$time.period == "late" &
+                  consensus.review.df$journal == journalName
+                  ] == "Non-Patient-Centric"
+    )
+  
+  mean.title.length.early <- mean(
+    consensus.review.df$title.length[
+                  consensus.review.df$time.period == "early" &
+                  consensus.review.df$journal == journalName
+                  ]
+    )
+  
+  mean.title.length.late <- mean(
+    consensus.review.df$title.length[
+                  consensus.review.df$time.period == "late" &
+                  consensus.review.df$journal == journalName
+                  ]
+    )
+  df.to.add <- data.frame(
+    proportion=c(mean.consensus.review.hits.early, mean.consensus.review.hits.late),
+    n.hits=c(num.consensus.review.hits.early, num.consensus.review.hits.late),
+    n.nonhits=c(num.consensus.review.nonhits.early, num.consensus.review.nonhits.late),
+    timeframe=c("early", "late"),
+    title.length=c(mean.title.length.early, mean.title.length.late),
+    journal=journalName)
+  consensus.review.df.for.barplot <- rbind(consensus.review.df.for.barplot, df.to.add)
+  
+}
+
+consensus.review.df.for.barplot$journal <- factor(
+                                            consensus.review.df.for.barplot$journal,
+                                            levels=c("jama", "lancet", "annals", "bmj", "nejm"))
+
+consensus.review.df.for.barplot$lcb.95 <- NA
+consensus.review.df.for.barplot$ucb.95 <- NA
+
+sapply(1:nrow(consensus.review.df.for.barplot), function(rowi) {
+  prop.test.out <- prop.test(consensus.review.df.for.barplot$n.hits[rowi], consensus.review.df.for.barplot$n.hits[rowi] + consensus.review.df.for.barplot$n.nonhits[rowi])
+  consensus.review.df.for.barplot$lcb.95[rowi] <<- prop.test.out$conf.int[1]
+  consensus.review.df.for.barplot$ucb.95[rowi] <<- prop.test.out$conf.int[2]
+})
+
+# Stats for proportions
+chisq.test(as.matrix(consensus.review.df.for.barplot[consensus.review.df.for.barplot$journal == "jama",c("n.hits", "n.nonhits")]))
+chisq.test(as.matrix(consensus.review.df.for.barplot[consensus.review.df.for.barplot$journal == "nejm",c("n.hits", "n.nonhits")]))
+chisq.test(as.matrix(consensus.review.df.for.barplot[consensus.review.df.for.barplot$journal == "annals",c("n.hits", "n.nonhits")]))
+chisq.test(as.matrix(consensus.review.df.for.barplot[consensus.review.df.for.barplot$journal == "bmj",c("n.hits", "n.nonhits")]))
+chisq.test(as.matrix(consensus.review.df.for.barplot[consensus.review.df.for.barplot$journal == "lancet",c("n.hits", "n.nonhits")]))
+
+# Stats for title length
+t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journal=="jama",])
+t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journal=="nejm",])
+t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journal=="annals",])
+t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journal=="bmj",])
+t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journal=="lancet",])
+@
+
+<<consensus_review_patient-centric_keywords_by_journal, fig.width=5, fig.height=5, out.width="0.6\\textwidth">>=
+ggplot(data=consensus.review.df.for.barplot, aes(x=journal, y=proportion, fill=timeframe)) +
+  geom_errorbar(aes(ymin=lcb.95, ymax=ucb.95), width=0.5, position=position_dodge(0.9), col="darkgray") +
+  geom_bar(stat='identity', position=position_dodge()) + 
+  #ggtitle("Proportion of clinical trial titles with patient-centric keywords") + 
+  scale_fill_manual(name="Time Period", values=c('gray','#E69F00'), labels=c("1976-1980", "2011-2015")) + 
+  theme_classic() + 
+  theme(plot.title = element_text(hjust=0.5, face="bold"), axis.text.y = element_text(size=10)) + 
+  scale_x_discrete(labels=c("JAMA", "Lancet", "Ann Intern\nMed.", "BMJ", "N Engl J\nMed.")) +
+  scale_y_continuous(breaks=seq(0,0.6,0.1), limits=c(0,0.6), labels=percent_format()) +
+  ylab("Percent of titles annotated as patient-centric") +
+  xlab("")
 @
 
 <<generate_patient-centric_keywords_by_journal>>=
@@ -411,10 +560,11 @@ clinical.trials.merged.df$title.length <- sapply(clinical.trials.merged.df$title
 clinical.trials.merged.df$time.period <- "middle"
 clinical.trials.merged.df$time.period[clinical.trials.merged.df$year %in% 1976:1980] <- "early"
 clinical.trials.merged.df$time.period[clinical.trials.merged.df$year %in% 2011:2015] <- "late"
-clinical.trials.merged.df$time.period[clinical.trials.merged.df$year %in% 1976:1985] <- "early"
-clinical.trials.merged.df$time.period[clinical.trials.merged.df$year %in% 2006:2015] <- "late"
 
-patient.keyword.df.for.barplot <- data.frame(proportion=numeric(), timeframe=factor(levels=c("early", "late")), title.length=numeric(), journal=character())
+#Remove duplicates based on title, journal, and year
+clinical.trials.merged.df <- clinical.trials.merged.df[!duplicated(clinical.trials.merged.df[,c(1,2,3)]),]
+
+patient.keyword.df.for.barplot <- data.frame(proportion=numeric(), n.hits=numeric(), n.nonhits=numeric(), timeframe=factor(levels=c("early", "late")), title.length=numeric(), journal=character(), lcb.95=numeric(), ucb.95=numeric())
 
 for(journalName in names(all.texts)) {
   mean.patient.keyword.hits.early <- mean(
@@ -495,6 +645,8 @@ sapply(1:nrow(patient.keyword.df.for.barplot), function(rowi) {
 prop.test(as.matrix(patient.keyword.df.for.barplot[patient.keyword.df.for.barplot$journal == "jama",c("n.hits", "n.nonhits")]))
 @
 
+We applied a keyword search for the percent of titles containing at least one of the following terms: patient, patients, adult, adults, woman, women, man, men, child, children, infant, infants, male, males, female, females, donor, donors
+
 <<patient-centric_keywords_by_journal, fig.width=5, fig.height=5, out.width="0.6\\textwidth">>=
 ggplot(data=patient.keyword.df.for.barplot, aes(x=journal, y=proportion, fill=timeframe)) +
   geom_errorbar(aes(ymin=lcb.95, ymax=ucb.95), width=0.5, position=position_dodge(0.9), col="darkgray") +
@@ -503,7 +655,7 @@ ggplot(data=patient.keyword.df.for.barplot, aes(x=journal, y=proportion, fill=ti
   scale_fill_manual(name="Time Period", values=c('gray','#E69F00'), labels=c("1976-1980", "2011-2015")) + 
   theme_classic() + 
   theme(plot.title = element_text(hjust=0.5, face="bold"), axis.text.y = element_text(size=10)) + 
-  scale_x_discrete(labels=c("JAMA", "Lancet", "Ann Intern\nMed.", "BMJ", "N Engl J\nMed.")) +
+  #scale_x_discrete(labels=c("JAMA", "Lancet", "Ann Intern\nMed.", "BMJ", "N Engl J\nMed.")) +
   scale_y_continuous(breaks=seq(0,0.6,0.1), limits=c(0,0.6), labels=percent_format()) +
   ylab("Percent of titles containing a patient-centric keyword") +
   xlab("")
@@ -772,7 +924,7 @@ get.barplot <- function(tdm.freq.per.100000, termInTitle, direction=c("positive"
 }
 @
 
-<<barplots_epidemiological_terms, fig.width=8, fig.height=8, eval=FALSE>>=
+<<barplots_epidemiological_terms, fig.width=8, fig.height=8, eval=TRUE>>=
 # Epidemiological terms
 grid.arrange(
   get.barplot(frequencyAnalysis$jama$title$all$monogram$term.freq.per.100000, "randomized"),
@@ -782,7 +934,7 @@ grid.arrange(
   ncol=2)
 @
 
-<<barplots_patient_vs_patients, fig.width=8, fig.height=8, eval=FALSE>>=
+<<barplots_patient_vs_patients, fig.width=8, fig.height=8, eval=TRUE>>=
 grid.arrange(
   get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "a patient", direction = "negative"),
   get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "in patients"),
@@ -791,7 +943,7 @@ grid.arrange(
   ncol=2)
 @
 
-<<barplots_elderly, fig.width=8, fig.height=8, eval=FALSE>>=
+<<barplots_elderly, fig.width=8, fig.height=8, eval=TRUE>>=
 grid.arrange(
   get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "the elderly", direction="negative"),
   get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "older patients"),
@@ -800,7 +952,7 @@ grid.arrange(
   )
 @
 
-<<barplots_diabetes, fig.width=8, fig.height=4, eval=FALSE>>=
+<<barplots_diabetes, fig.width=8, fig.height=4, eval=TRUE>>=
 grid.arrange(
   get.barplot(frequencyAnalysis$jama$title$all$monogram$term.freq.per.100000, "diabetes"),
   get.barplot(frequencyAnalysis$jama$title$all$monogram$term.freq.per.100000, "diabetic", direction = "negative"),
@@ -824,21 +976,21 @@ writeLines(head(unique(article.titles.with.diabetes), 20))
 writeLines(tail(unique(article.titles.with.diabetes), 22))
 @
 
-<<barplots_causation, fig.width=8, fig.height=4, eval=FALSE>>=
+<<barplots_causation, fig.width=8, fig.height=4, eval=TRUE>>=
 grid.arrange(
   get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "caused by", direction = "negative"),
   get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "cause of", direction = "negative"),
   ncol=2)
 @
 
-<<barplots_kidney, fig.width=8, fig.height=4, eval=FALSE>>=
+<<barplots_kidney, fig.width=8, fig.height=4, eval=TRUE>>=
 grid.arrange(
   get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "kidney disease"),
   get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "renal failure", direction = "negative"),
   ncol=2)
 @
 
-<<barplots_mental_health, fig.width=8, fig.height=4, eval=FALSE>>=
+<<barplots_mental_health, fig.width=8, fig.height=4, eval=TRUE>>=
 grid.arrange(
   get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "mental health"),
   get.barplot(frequencyAnalysis$jama$title$all$bigram$term.freq.per.100000, "posttraumatic stress"),
@@ -880,10 +1032,11 @@ get.top.terms.barplot(frequencyAnalysis$jama$title$all$monogram)
 get.top.terms.barplot(frequencyAnalysis$jama$title$all$bigram)
 @
 
-<<plot, eval=FALSE>>=
-p1 <- get.top.terms.barplot(frequencyAnalysis$jama$title$all$monogram) + ylab("Annual change in frequency\nper 100,000 terms") + theme(axis.title.x=element_text(size=9))
-p2 <- get.top.terms.barplot(frequencyAnalysis$jama$title$all$bigram)  + ylab("Annual change in frequency\nper 100,000 terms") + theme(axis.title.x=element_text(size=9))
-ggsave("jama_plots_together.pdf", width=6.5, height=5.7, arrangeGrob(p1, p2, layout_matrix = matrix(c(1,2), ncol=2)))
+<<jama-plots-together, fig.width=10, fig.height=6>>=
+p1 <- get.top.terms.barplot(frequencyAnalysis$jama$title$all$monogram)
+p2 <- get.top.terms.barplot(frequencyAnalysis$jama$title$all$bigram)
+grid.arrange(p1, p2, ncol=2, widths=c(1, 1.085))
+#ggsave("jama_plots_together.pdf", width=6.5, height=5.7, arrangeGrob(p1, p2, layout_matrix = matrix(c(1,2), ncol=2)))
 @
 
 <<mega-plot-jama, fig.width=8, fig.height=10>>=
