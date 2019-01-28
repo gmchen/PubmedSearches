@@ -7,7 +7,7 @@
 <<setup, include=FALSE, cache=FALSE>>=
 library(knitr)
 # set global chunk options
-opts_chunk$set(fig.path='Figures/', fig.align='center', fig.show='hold', echo=FALSE, warning=FALSE, message=FALSE, results="hide", cache=FALSE)
+opts_chunk$set(fig.path='Figures/', fig.align='center', fig.show='hold', echo=FALSE, warning=FALSE, message=FALSE, results="hide", cache=FALSE, dev=c('pdf','postscript'))
 @
 
 \title{Trends in Patient Descriptions in the Medical Literature}
@@ -495,6 +495,20 @@ t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journ
 t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journal=="lancet",])
 @
 
+Number of articles of all types from all journals: \Sexpr{sum(sapply(all.texts, function(x) length(x$title)))}
+Number of articles of all types from each journals: \Sexpr{sapply(all.texts, function(x) length(x$title))}
+
+Number of JAMA articles of all types: \Sexpr{length(all.texts$jama$title)}
+
+Number of clinical trial titles by journal:
+\Sexpr{table(consensus.review.df$journal)}
+
+Average increase in character count:
+\Sexpr{consensus.review.df.for.barplot$title.length[c(2,4,6,8,10)] - consensus.review.df.for.barplot$title.length[c(1,3,5,7,9)]}
+
+Absolute change in proportion of patient-centric titles:
+\Sexpr{consensus.review.df.for.barplot$proportion[c(2,4,6,8,10)] - consensus.review.df.for.barplot$proportion[c(1,3,5,7,9)]}
+
 <<consensus_review_patient-centric_keywords_by_journal, fig.width=5, fig.height=5, out.width="0.6\\textwidth">>=
 
 sig.label.df <- data.frame(journal = c("jama", "lancet", "annals", "bmj"),
@@ -513,8 +527,8 @@ ggplot(data=consensus.review.df.for.barplot, aes(x=journal, y=proportion)) +
   scale_y_continuous(breaks=seq(0,0.6,0.1), limits=c(0,0.6), labels=percent_format()) +
   ylab("Percent of titles annotated as patient-centric") +
   xlab("") +
-  geom_text(data = sig.label.df, label = "*", size=9) + 
-  geom_text(data = nonsig.label.df, label = "n.s.", size=5)
+  geom_text(data = sig.label.df, label = "*", size=7)
+  #geom_text(data = nonsig.label.df, label = "n.s.", size=3)
 @
 
 <<generate_patient-centric_keywords_by_journal>>=
@@ -806,6 +820,21 @@ where $i \in {1, 2, \ldots, N_{\textnormal{monogram}}} \textnormal{ or } {1, 2, 
 
 Linear regression was performed for each monogram or bigram, and the coefficients $\beta_{1i}$ were extracted. Each $\beta_{1i}$ can be interpreted as the average increase in frequency per year for the $i^{\textnormal{th}}$ monogram or bigram. Linear regression also produced p values $p_i$. For monograms and bigrams separately, multiple testing correction across the $p_i$ values was performed using the Benjamini and Hochberg method with an FDR threshold of 0.01. 
 
+Monograms such as ``randomized'', ``trial'', ``outcomes'', and ``risk'' showed significant increases with the following mean annual change in frequency per 10,000 words:
+\Sexpr{frequencyAnalysis$jama$title$all$monogram$sig.lm.coefficients[c("randomized", "trial", "outcomes", "risk")]}
+
+Bigrams such as ``a patient'' and ``patient with'' decreased, and ``in patients'' and ``patients with'' increased
+\Sexpr{frequencyAnalysis$jama$title$all$bigram$sig.lm.coefficients[c("a patient", "patient with", "in patients", "patients with")]}
+
+Bigrams such as ``the elderly'' decreased, and ``older patients'' and ``older adults'' increased
+\Sexpr{frequencyAnalysis$jama$title$all$bigram$sig.lm.coefficients[c("the elderly", "older patients", "older adults")]}
+
+Bigrams such as ``caused by'' and ``cause of'' decreased, and ``association between'' and ``association of'' increased
+\Sexpr{frequencyAnalysis$jama$title$all$bigram$sig.lm.coefficients[c("caused by", "cause of", "association between", "association of")]}
+
+The monogram ``diabetes'' significantly increased, and ``diabetic'' significantly decreased:
+\Sexpr{frequencyAnalysis$jama$title$all$monogram$sig.lm.coefficients[c("diabetes", "diabetic")]}
+
 <<get_tables_of_top_hits>>=
 monogram.coefficient.texts <- paste0(
               sprintf("%.2f", frequencyAnalysis$jama$title$all$monogram$sig.lm.coefficients),
@@ -835,15 +864,6 @@ monogram.regression.df <- monogram.regression.df[order(frequencyAnalysis$jama$ti
 title.texts.all.significant.hits <- frequencyAnalysis$jama$title$all$monogram$sig.lm.coefficients
 #title.texts.all.significant.hits <- title.texts.all.significant.hits[!(names(title.texts.all.significant.hits) %in% stopwords())]
 
-# Remove the words from journal-specific headings
-# TODO: remove these earlier on
-# A piece of my mind
-# JAMA patient page
-# The cover.
-# Council on Scientific Affairs
-# From the NIH:
-#title.texts.words.to.exclude <- c("piece", "mind", "jama", "patient", "page", "cover", "council")
-#title.texts.all.significant.hits <- title.texts.all.significant.hits[!(names(title.texts.all.significant.hits) %in% title.texts.words.to.exclude)]
 
 # Top 20 positive hits
 #writeLines(paste(rev(tail(names(title.texts.all.significant.hits), 20)), collapse="\n"))
@@ -1043,9 +1063,19 @@ get.top.terms.barplot(frequencyAnalysis$jama$title$all$bigram)
 
 <<jama-plots-together, fig.width=10, fig.height=6>>=
 p1 <- get.top.terms.barplot(frequencyAnalysis$jama$title$all$monogram)
+p1 <- p1 + scale_y_continuous(limits=c(-20,40), breaks=c(-20,-10,0,10,20,30,40))
 p2 <- get.top.terms.barplot(frequencyAnalysis$jama$title$all$bigram)
+p2 <- p2 + scale_y_continuous(limits=c(-15,20), breaks=c(-15,-10,-5,0,5,10,15,20))
 grid.arrange(p1, p2, ncol=2, widths=c(1, 1.085))
 #ggsave("jama_plots_together.pdf", width=6.5, height=5.7, arrangeGrob(p1, p2, layout_matrix = matrix(c(1,2), ncol=2)))
+@
+
+<<jama-figure-1A, fig.width=5, fig.height=6>>=
+p1
+@
+
+<<jama-figure-1B, fig.width=5, fig.height=6>>=
+p2
 @
 
 <<mega-plot-jama, fig.width=12, fig.height=14>>=
