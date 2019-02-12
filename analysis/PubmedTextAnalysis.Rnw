@@ -482,17 +482,22 @@ sapply(1:nrow(consensus.review.df.for.barplot), function(rowi) {
 
 # Stats for proportions
 chisq.test(as.matrix(consensus.review.df.for.barplot[consensus.review.df.for.barplot$journal == "jama",c("n.hits", "n.nonhits")]))
+
 chisq.test(as.matrix(consensus.review.df.for.barplot[consensus.review.df.for.barplot$journal == "lancet",c("n.hits", "n.nonhits")]))
+
 chisq.test(as.matrix(consensus.review.df.for.barplot[consensus.review.df.for.barplot$journal == "annals",c("n.hits", "n.nonhits")]))
+
 chisq.test(as.matrix(consensus.review.df.for.barplot[consensus.review.df.for.barplot$journal == "bmj",c("n.hits", "n.nonhits")]))
+
 chisq.test(as.matrix(consensus.review.df.for.barplot[consensus.review.df.for.barplot$journal == "nejm",c("n.hits", "n.nonhits")]))
 
+
 # Stats for title length
-t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journal=="jama",])
-t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journal=="nejm",])
-t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journal=="annals",])
-t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journal=="bmj",])
-t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journal=="lancet",])
+t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journal=="jama",], alternative="less")
+t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journal=="lancet",], alternative="less")
+t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journal=="annals",], alternative="less")
+t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journal=="bmj",], alternative="less")
+t.test(title.length ~ time.period, consensus.review.df[consensus.review.df$journal=="nejm",], alternative="less")
 @
 
 Number of articles of all types from all journals: \Sexpr{sum(sapply(all.texts, function(x) length(x$title)))}
